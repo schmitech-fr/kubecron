@@ -242,7 +242,7 @@ Full detail, evidence, and history: `docs/AUDIT.md` (IDs below reference it).
 ## CI/CD Notes
 
 - `ci.yml` runs on push/PR to `main`: `go build`, `go vet`, `go test` (+ `-race`), `golangci-lint`, `helm lint`. Skipped for `renovate[bot]` (see AUDIT INFRA-5).
-- `docker-publish.yml` pushes to `ghcr.io/thomas6013/kubecron` on **every push to `main`** (tags `main`, `<commit-sha>`) and on `*.*.*` tag push (tags `latest`, `<git-tag>`, `<commit-sha>`).
+- `docker-publish.yml` pushes to `ghcr.io/schmitech-fr/kubecron` on **every push to `main`** (tags `main`, `<commit-sha>`) and on `*.*.*` tag push (tags `latest`, `<git-tag>`, `<commit-sha>`).
 - Platforms: `linux/amd64` only for now (arm64 pending — AUDIT INFRA-3).
 - SBOM generated per release image with `anchore/sbom-action` (SPDX); release images signed with `sigstore/cosign` (keyless, OIDC-based).
 

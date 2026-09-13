@@ -8,8 +8,8 @@ keywords:
   - kubernetes
   - cronjob
   - monitoring
-home: https://github.com/thomas6013/kubecron
+home: https://github.com/schmitech-fr/kubecron
 sources:
-  - https://github.com/thomas6013/kubecron
+  - https://github.com/schmitech-fr/kubecron
 maintainers:
-  - name: thomas6013
+  - name: schmitech-fr

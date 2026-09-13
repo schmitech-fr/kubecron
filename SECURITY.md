@@ -10,7 +10,7 @@
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Instead, report them privately via [GitHub Security Advisories](https://github.com/thomas6013/kubecron/security/advisories/new).
+Instead, report them privately via [GitHub Security Advisories](https://github.com/schmitech-fr/kubecron/security/advisories/new).
 
 Include:
 - A description of the vulnerability

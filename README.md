@@ -93,7 +93,7 @@ OpenAPI 3.1 spec at **[docs/openapi.yaml](docs/openapi.yaml)**.
 # Encode your kubeconfig(s) in base64 — one per cluster
 KC=$(kubectl config view --minify --raw | base64 -w0)
 
-helm install kubecron oci://ghcr.io/thomas6013/charts/kubecron \
+helm install kubecron oci://ghcr.io/schmitech-fr/charts/kubecron \
   --namespace kubecron --create-namespace \
   --set "kubeconfigs.data.my-cluster=$KC"
 ```
@@ -101,7 +101,7 @@ helm install kubecron oci://ghcr.io/thomas6013/charts/kubecron \
 Or from source:
 
 ```bash
-git clone https://github.com/thomas6013/kubecron.git
+git clone https://github.com/schmitech-fr/kubecron.git
 cd kubecron
 
 KC=$(kubectl config view --minify --raw | base64 -w0)
@@ -145,7 +145,7 @@ Full list of values: [`charts/kubecron/values.yaml`](charts/kubecron/values.yaml
 ### Docker Compose (local)
 
 ```bash
-git clone https://github.com/thomas6013/kubecron.git && cd kubecron
+git clone https://github.com/schmitech-fr/kubecron.git && cd kubecron
 
 # Place kubeconfig files in dev/kubeconfigs/
 cp ~/.kube/config dev/kubeconfigs/local.yaml
