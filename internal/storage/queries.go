@@ -646,7 +646,6 @@ func (s *SQLiteStore) GetLogLines(ctx context.Context, runID string) ([]LogLine,
 	return out, wrapErr("GetLogLines rows", rows.Err())
 }
 
-
 func (s *SQLiteStore) GetLogLinesTail(ctx context.Context, runID string, limit int) ([]LogLine, error) {
 	if limit <= 0 {
 		return s.GetLogLines(ctx, runID)

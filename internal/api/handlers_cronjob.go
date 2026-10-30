@@ -217,4 +217,3 @@ func (h *Handler) Trigger(w http.ResponseWriter, r *http.Request) {
 		PodName: created.Name,
 	})
 }
-
