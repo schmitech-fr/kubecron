@@ -9,6 +9,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	"github.com/kubecron/kubecron/internal/schedule"
 	"github.com/kubecron/kubecron/internal/storage"
@@ -142,7 +143,12 @@ type triggerResponse struct {
 }
 
 // Trigger handles POST /api/clusters/{clusterID}/cronjobs/{ns}/{name}/trigger.
-// It creates a one-off Job derived from the CronJob's JobTemplate.
+// It creates a one-off Job derived from the CronJob's JobTemplate, owned by
+// the CronJob the way `kubectl create job --from=cronjob/…` owns it: without
+// the owner reference the JobHandler does not recognise the Job as a run of
+// this CronJob, history limits never collect it and deleting the CronJob
+// leaves it behind. BlockOwnerDeletion is left unset so the ServiceAccount
+// needs no access to cronjobs/finalizers.
 func (h *Handler) Trigger(w http.ResponseWriter, r *http.Request) {
 	clusterID := r.PathValue("clusterID")
 	ns := r.PathValue("ns")
@@ -157,6 +163,8 @@ func (h *Handler) Trigger(w http.ResponseWriter, r *http.Request) {
 
 	cronJob, err := cl.Clientset.BatchV1().CronJobs(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
+		slog.Error("failed to get cronjob for trigger",
+			"cluster", clusterID, "namespace", ns, "name", name, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to get cronjob")
 		return
 	}
@@ -168,12 +176,24 @@ func (h *Handler) Trigger(w http.ResponseWriter, r *http.Request) {
 			Labels: map[string]string{
 				"kubecron/trigger": "manual",
 			},
+			Annotations: map[string]string{
+				"cronjob.kubernetes.io/instantiate": "manual",
+			},
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "batch/v1",
+				Kind:       "CronJob",
+				Name:       cronJob.Name,
+				UID:        cronJob.UID,
+				Controller: ptr.To(true),
+			}},
 		},
 		Spec: cronJob.Spec.JobTemplate.Spec,
 	}
 
 	created, err := cl.Clientset.BatchV1().Jobs(ns).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
+		slog.Error("failed to create triggered job",
+			"cluster", clusterID, "namespace", ns, "name", name, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to create job")
 		return
 	}
