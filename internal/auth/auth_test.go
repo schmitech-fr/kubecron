@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -77,11 +80,14 @@ func TestSafeRedirect(t *testing.T) {
 	}{
 		{"/dashboard", "/dashboard"},
 		{"/clusters/foo/bar", "/clusters/foo/bar"},
-		{"//evil.com", "/"},          // protocol-relative URL
-		{"https://evil.com", "/"},    // absolute HTTPS
+		{"//evil.com", "/"},            // protocol-relative URL
+		{"https://evil.com", "/"},      // absolute HTTPS
 		{"http://evil.com/steal", "/"}, // absolute HTTP
-		{"javascript:alert(1)", "/"}, // JS injection
-		{"", "/"},                    // empty falls back
+		{"javascript:alert(1)", "/"},   // JS injection
+		{"", "/"},                      // empty falls back
+		{"/\\evil.com", "/"},           // backslash read as a slash by browsers
+		{"/\t/evil.com", "/"},          // tab stripped by browsers before parsing
+		{"/runs?a=1&b=2", "/runs?a=1&b=2"},
 	}
 	for _, tc := range tests {
 		got := safeRedirect(tc.raw, "/")
@@ -106,8 +112,8 @@ func TestIsAllowedAndCanOperate(t *testing.T) {
 		email             string
 		allowed, operator bool
 	}{
-		{"alice@x.com", true, true},   // operator (case-insensitive on config)
-		{"BOB@x.com", true, false},    // allowed but read-only (case-insensitive input)
+		{"alice@x.com", true, true},    // operator (case-insensitive on config)
+		{"BOB@x.com", true, false},     // allowed but read-only (case-insensitive input)
 		{"eve@evil.com", false, false}, // not allowed at all
 	}
 	for _, c := range cases {
@@ -117,5 +123,35 @@ func TestIsAllowedAndCanOperate(t *testing.T) {
 		if got := a.CanOperate(c.email); got != c.operator {
 			t.Errorf("CanOperate(%q) = %v, want %v", c.email, got, c.operator)
 		}
+	}
+}
+
+func TestRedirectToLogin_KeepsQueryString(t *testing.T) {
+	w := httptest.NewRecorder()
+	redirectToLogin(w, httptest.NewRequest("GET", "/runs?a=1&b=2", nil))
+
+	loc, err := url.Parse(w.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loc.Query().Get("redirect"); got != "/runs?a=1&b=2" {
+		t.Errorf("redirect = %q, want the full original URI", got)
+	}
+}
+
+func TestMiddleware_StaticIsExempt(t *testing.T) {
+	a := newTestAuth()
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	w := httptest.NewRecorder()
+	a.Middleware(next).ServeHTTP(w, httptest.NewRequest("GET", "/static/app.css", nil))
+	if w.Code != http.StatusOK {
+		t.Errorf("/static/app.css without a session: got %d, want 200", w.Code)
+	}
+
+	w = httptest.NewRecorder()
+	a.Middleware(next).ServeHTTP(w, httptest.NewRequest("GET", "/clusters/x", nil))
+	if w.Code != http.StatusFound {
+		t.Errorf("/clusters/x without a session: got %d, want 302", w.Code)
 	}
 }
