@@ -131,7 +131,7 @@ See `.env.example`. Key variables:
 | `KUBECONFIG_DIR` | `/etc/kubecron/kubeconfigs` | One kubeconfig file per cluster |
 | `DB_PATH` | `/data/kubecron.db` | SQLite database file |
 | `PORT` | `8080` | HTTP listen port |
-| `RETENTION_DAYS` | `90` | Days of run history (job_runs) to keep |
+| `RETENTION_DAYS` | `180` | Days of run history (job_runs) to keep |
 | `LOG_RETENTION_DAYS` | `14` | Days of raw log lines to keep (run metadata kept until RETENTION_DAYS) |
 | `METRICS_SAMPLE_INTERVAL` | `15` | Resource sampling interval (seconds) |
 | `OIDC_ENABLED` | `false` | Enable OIDC/SSO |
@@ -194,9 +194,8 @@ Full detail, evidence, and history: `docs/AUDIT.md` (IDs below reference it).
 
 ### Infra & CI — Medium Priority
 
-- **SUP-1** — no CVE gate in CI. `govulncheck ./...` reported 14 reachable stdlib advisories at the `go 1.26.0` floor; the release image escaped them only because the base tag floats. The build now uses `golang:1.27-alpine` (CI and Dockerfile, 2026-08-21), but **`go.mod` still declares `go 1.26.0`**, so the floor — and what govulncheck measures against — is unchanged. Add `govulncheck` to `ci.yml` and an image scan to `docker-publish.yml` **before** pinning digests (INFRA-1).
+- **SUP-1 (partial)** — `govulncheck ./...` runs in `ci.yml` and `go.mod` declares `go 1.27.0` _(v0.5.0)_. Still missing: an image scan in `docker-publish.yml`, which must land **before** pinning digests (INFRA-1).
 - **INFRA-3** — release images are `linux/amd64` only; the arm64 claim is not implemented in `docker-publish.yml` (no QEMU step). Implement or drop the claim.
-- **INFRA-5** — CI is skipped entirely for `renovate[bot]`; Renovate already has nine open branches, so its PRs would merge untested.
 
 ### Performance — Medium Priority
 
@@ -208,6 +207,7 @@ Full detail, evidence, and history: `docs/AUDIT.md` (IDs below reference it).
 
 ### Resolved (archived)
 
+- **INFRA-5** — CI no longer skipped for `renovate[bot]`; `renovate.json` groups `k8s.io/*`, which only build at matching versions _(v0.5.0)_.
 - **BUG-22** — missed-run detection was silently off for anything sparser than daily _(v0.4.0)_. `PrevRun` scanned back a fixed 25 hours, so a weekly CronJob had no occurrence in the window on six days out of seven and a monthly one on twenty-nine days out of thirty; it returned an error, `IsMissed` read that as "cannot say" and answered **false**. A healthy monthly job and one silent for seventy days gave the same answer, so nothing looked wrong. The window is now derived from the schedule's own cadence and expanded — which also cut the per-minute case from ~1 500 `Next()` calls per row to ~3. Second half: when the most recent occurrence is still inside `MissedGracePeriod`, `IsMissed` steps back to the one before rather than answering false, because a per-minute CronJob is inside *some* occurrence's grace period at every instant and could therefore never be reported missed at all. **The step-back only applies when a run exists to compare against** — with none, the earlier occurrence may predate the CronJob, and a job created three minutes ago must not be flagged for a tick from before it existed. Found while porting this package to KubeDeck; the two implementations were then diffed over 13 scenarios and agree on all of them.
 
 - **BUG-21** — run-history paging returned nothing past the first page _(v0.4.0)_. The driver stores a `time.Time` in Go's `time.Time.String()` layout, which is not ISO 8601, so SQLite's `datetime()` returned NULL and `datetime(started_at) < datetime(?)` was NULL for every row — the UI's "Load more" silently stopped at 50 runs. `ListJobRunsPaged` now takes a `time.Time` and compares directly. **Do not wrap `started_at` in a SQLite date function**; comparisons against it are lexicographic, which is what `ORDER BY started_at` already relied on.
@@ -231,18 +231,18 @@ Full detail, evidence, and history: `docs/AUDIT.md` (IDs below reference it).
 - **Schedules**: never evaluate a cron expression without its zone. Every `schedule` entry point takes an IANA zone name; pass `cj.TZ()`. On error, show nothing rather than a wrong time — a wrong countdown is worse than an absent one.
 - **Error handling**: never return raw K8s API or DB errors to HTTP clients. Log with `slog.Error()`, return 500.
 - **Secrets**: never log kubeconfig paths or content, OIDC secrets, or session keys.
-- **Versioning**: update `CHANGELOG.md` and the `Version` constant in `internal/version/version.go` on every release.
+- **Versioning**: on every release update `CHANGELOG.md`, the `Version` constant in `internal/version/version.go`, and `version`/`appVersion` in `charts/kubecron/Chart.yaml`.
 - **RBAC**: any new K8s API access must be added to `charts/kubecron/templates/clusterrole.yaml`. A mutating verb belongs in the `mode: ui` branch only.
 - **Modes**: a new route is registered in `registerUI` (dashboard, unversioned `/api/*`, anything mutating) or in `registerCollectorAPI` (`/api/v1`, GET-only, served in both modes). Never both, and never a mutating route in the second — see `docs/COLLECTOR-API.md`.
 - **The `/api/v1` contract is a promise**: fields may be added within `v1`, never removed, renamed or repurposed. A breaking change mints `v2` and `api_versions` lists both. Absence is never reported as fact — a shape that can be empty must carry the field that says *why* (`observed_since`, `expired`, `metrics_enabled`). Any change to a `/api/v1` shape must land in `docs/openapi.yaml` **and** `docs/COLLECTOR-API.md` in the same commit.
-- **Docker images**: published only on `*.*.*` tag push — `git tag 0.3.0 && git push origin 0.3.0`.
+- **Docker images**: release images publish only on a `vX.Y.Z` tag push (image tag `X.Y.Z`, no `v`) — `git tag v0.5.0 && git push origin v0.5.0`. `latest` moves only on a final version, not on `vX.Y.Z-rc.N`.
 
 ---
 
 ## CI/CD Notes
 
-- `ci.yml` runs on push/PR to `main`: `go build`, `go vet`, `go test` (+ `-race`), `golangci-lint`, `helm lint`. Skipped for `renovate[bot]` (see AUDIT INFRA-5).
-- `docker-publish.yml` pushes to `ghcr.io/schmitech-fr/kubecron` on **every push to `main`** (tags `main`, `<commit-sha>`) and on `*.*.*` tag push (tags `latest`, `<git-tag>`, `<commit-sha>`).
+- `ci.yml` runs on push/PR to `main`: `go build`, `go vet`, `go test` (+ `-race`), `golangci-lint`, `govulncheck`, `helm lint`.
+- `docker-publish.yml` pushes to `ghcr.io/schmitech-fr/kubecron` on **every push to `main`** (tags `main`, `<commit-sha>`) and on `vX.Y.Z` tag push (tags `X.Y.Z`, `<commit-sha>`, plus `latest` on a final version).
 - Platforms: `linux/amd64` only for now (arm64 pending — AUDIT INFRA-3).
 - SBOM generated per release image with `anchore/sbom-action` (SPDX); release images signed with `sigstore/cosign` (keyless, OIDC-based).
 
@@ -280,12 +280,12 @@ Full detail, evidence, and history: `docs/AUDIT.md` (IDs below reference it).
 2. PR reviewed and merged into `main`
 3. Tag pushed from `main`:
    ```bash
-   git tag 0.X.Y && git push origin 0.X.Y
+   git tag v0.X.Y && git push origin v0.X.Y
    ```
-   The `docker-publish.yml` workflow triggers automatically on `*.*.*` tag push.
+   The `docker-publish.yml` workflow triggers automatically on a `v[0-9]+.[0-9]+.[0-9]+` tag push and publishes image `0.X.Y`.
 
 ### Common pitfalls
-- Release image tags (`latest`, `<version>`) publish **only on tag push** — the tag must exactly match the version bump (`main`/`<sha>` tags also publish on every main push)
+- Release image tags (`latest`, `<version>`) publish **only on tag push** — `vX.Y.Z` must exactly match `Version`, `Chart.yaml` `version`/`appVersion` and the CHANGELOG heading (`main`/`<sha>` tags also publish on every main push)
 - `helm lint` is now in CI (`helm-lint` job) — run it locally first to avoid a wasted CI run
 - New Prometheus metrics must be wired (incremented/set) in the appropriate watcher or handler — declaring them in `metrics.go` is not enough
 

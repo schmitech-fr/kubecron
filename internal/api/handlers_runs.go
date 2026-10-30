@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -407,7 +408,25 @@ func (h *Handler) RunDetail(w http.ResponseWriter, r *http.Request) {
 // as a plain-text file download.
 func (h *Handler) DownloadLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	lines, _ := h.store.GetLogLines(r.Context(), id)
+	ctx := r.Context()
+	// An unknown run answers 404, not an empty file: an empty body is what a
+	// run that printed nothing returns, and the two must not look alike.
+	run, err := h.store.GetJobRun(ctx, id)
+	if err != nil {
+		slog.Error("failed to look up run for log download", "run_id", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to look up run")
+		return
+	}
+	if run == nil {
+		writeError(w, http.StatusNotFound, "run not found")
+		return
+	}
+	lines, err := h.store.GetLogLines(ctx, id)
+	if err != nil {
+		slog.Error("failed to load log lines for download", "run_id", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to load logs")
+		return
+	}
 	fname := id
 	if len(fname) > 8 {
 		fname = fname[:8]

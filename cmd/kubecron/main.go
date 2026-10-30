@@ -35,7 +35,7 @@ type Config struct {
 	KubeconfigDir         string `env:"KUBECONFIG_DIR"          envDefault:"/etc/kubecron/kubeconfigs"`
 	DBPath                string `env:"DB_PATH"                 envDefault:"/data/kubecron.db"`
 	Port                  int    `env:"PORT"                    envDefault:"8080"`
-	RetentionDays         int    `env:"RETENTION_DAYS"          envDefault:"90"`
+	RetentionDays         int    `env:"RETENTION_DAYS"          envDefault:"180"`
 	LogRetentionDays      int    `env:"LOG_RETENTION_DAYS"      envDefault:"14"`
 	MetricsSampleInterval int    `env:"METRICS_SAMPLE_INTERVAL" envDefault:"15"` // seconds
 	// ClusterID names the cluster when KubeCron runs on its own ServiceAccount

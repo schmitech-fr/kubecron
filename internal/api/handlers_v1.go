@@ -38,7 +38,7 @@ const (
 
 	// v1DefaultRunLimit and v1MaxRunLimit bound the run history page size.
 	// Unbounded is not offered: a CronJob that runs every minute accumulates
-	// ~130 000 rows over the default 90-day retention.
+	// ~260 000 rows over the default 180-day retention.
 	v1DefaultRunLimit = 100
 	v1MaxRunLimit     = 1000
 

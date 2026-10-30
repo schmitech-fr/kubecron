@@ -307,6 +307,7 @@ paths:
             text/plain:
               schema: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/runs/{id}/stream:
     get:
@@ -566,7 +567,7 @@ components:
         run_days:
           type: integer
           description: Days of run metadata kept (`RETENTION_DAYS`).
-          examples: [90]
+          examples: [180]
         log_days:
           type: integer
           description: |

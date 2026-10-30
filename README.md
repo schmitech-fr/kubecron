@@ -89,21 +89,14 @@ OpenAPI 3.1 spec at **[docs/openapi.yaml](docs/openapi.yaml)**.
 
 ### Helm (recommended)
 
-```bash
-# Encode your kubeconfig(s) in base64 — one per cluster
-KC=$(kubectl config view --minify --raw | base64 -w0)
-
-helm install kubecron oci://ghcr.io/schmitech-fr/charts/kubecron \
-  --namespace kubecron --create-namespace \
-  --set "kubeconfigs.data.my-cluster=$KC"
-```
-
-Or from source:
+The chart is not published to a registry yet; install it from a tagged checkout
+(the chart's `appVersion` selects the matching image):
 
 ```bash
-git clone https://github.com/schmitech-fr/kubecron.git
+git clone --branch v0.5.0 https://github.com/schmitech-fr/kubecron.git
 cd kubecron
 
+# Encode your kubeconfig(s) in base64 — one per cluster
 KC=$(kubectl config view --minify --raw | base64 -w0)
 
 helm install kubecron ./charts/kubecron \
@@ -116,7 +109,7 @@ Key Helm values:
 
 | Value | Default | Description |
 |---|---|---|
-| `config.retentionDays` | `90` | Days of run history (metadata) to keep |
+| `config.retentionDays` | `180` | Days of run history (metadata) to keep |
 | `config.logRetentionDays` | `14` | Days of raw log lines to keep (≤ `retentionDays`) |
 | `config.metricsSampleInterval` | `15` | Resource sampling interval (seconds) |
 | `persistence.size` | `500Mi` | PVC size for SQLite data |
@@ -177,7 +170,7 @@ All configuration is via environment variables.
 | `KUBECONFIG_DIR` | `/etc/kubecron/kubeconfigs` | Directory with one kubeconfig file per cluster |
 | `DB_PATH` | `/data/kubecron.db` | SQLite database file path |
 | `PORT` | `8080` | HTTP listen port |
-| `RETENTION_DAYS` | `90` | How many days of run history (metadata) to keep |
+| `RETENTION_DAYS` | `180` | How many days of run history (metadata) to keep |
 | `LOG_RETENTION_DAYS` | `14` | How many days of raw log lines to keep (≤ `RETENTION_DAYS`) |
 | `METRICS_SAMPLE_INTERVAL` | `15` | Resource sampling interval in seconds (requires metrics-server) |
 | `OIDC_ENABLED` | `false` | Enable OIDC/SSO authentication |

@@ -1,3 +1,11 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "description": "k8s.io modules are released together and only build at matching versions",
+      "groupName": "k8s.io",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["k8s.io/**"]
+    }
+  ]
 }

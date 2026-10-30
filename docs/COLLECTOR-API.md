@@ -194,7 +194,7 @@ Discovery. Call it first.
     "run_history": true, "run_logs": true, "resource_samples": true,
     "live_log_stream": true, "mutations": false
   },
-  "retention": { "run_days": 90, "log_days": 14 },
+  "retention": { "run_days": 180, "log_days": 14 },
   "sample_interval_seconds": 15,
   "clusters": [
     { "id": "prod-eu", "name": "prod-eu", "metrics_enabled": true,
@@ -359,7 +359,8 @@ follows the rest.
 
 ### `GET /api/v1/runs/{id}/logs.txt`
 
-The same body as `text/plain`, for saving to a file.
+The same body as `text/plain`, for saving to a file. An unknown run is a `404`,
+not an empty file.
 
 ### `GET /api/v1/runs/{id}/stream`
 

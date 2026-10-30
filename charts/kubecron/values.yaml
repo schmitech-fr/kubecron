@@ -26,7 +26,7 @@ mode: ui
 config:
   port: 8080
   # Days of run history (metadata) to keep in SQLite
-  retentionDays: 90
+  retentionDays: 180
   # Days of raw log lines to keep (should be <= retentionDays)
   logRetentionDays: 14
   metricsSampleInterval: 15
