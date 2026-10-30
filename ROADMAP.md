@@ -14,7 +14,7 @@ for engineering findings behind the AUDIT ids, see [`docs/AUDIT.md`](docs/AUDIT.
 - [ ] **Publish Helm chart to OCI / Artifact Hub** — push `charts/kubecron` to GHCR OCI registry and submit to Artifact Hub
 - [ ] **GitHub Container Registry visibility** — ensure GHCR images are public once the repo is public
 - [ ] **Automated GitHub Releases** — workflow that creates a GitHub Release from CHANGELOG entries on tag push
-- [ ] **CVE gate in CI** — `govulncheck ./...` on every build plus an image scan on publish. **Must land before digest pinning** (AUDIT SUP-1)
+- [ ] **CVE gate in CI** — `govulncheck ./...` on every build _(done v0.5.0)_; image scan on publish still to do. **Must land before digest pinning** (AUDIT SUP-1)
 - [ ] **Pin base image digests** — `golang:1.26@sha256:...` and `gcr.io/distroless/static:nonroot@sha256:...` in Dockerfile. Do this *after* the CVE gate: today the floating tag is what keeps the shipped stdlib patched, so pinning first would freeze a vulnerable one in (AUDIT INFRA-1 × SUP-1)
 
 ## Features
@@ -61,7 +61,7 @@ for engineering findings behind the AUDIT ids, see [`docs/AUDIT.md`](docs/AUDIT.
 - [x] **helm lint in CI** _(v0.0.1)_
 - [x] **Unit tests (partial)** — schedule (incl. timezone/DST), auth HMAC, storage (incl. migration upgrade path), broadcaster, watcher (Job + CronJob handlers), HTTP handlers (`internal/api`) covered _(v0.2.0)_
 - [ ] **Integration tests** — Pod informer event handling with `k8s.io/client-go/kubernetes/fake` (Job and CronJob handlers already covered)
-- [ ] **Renovate** — automated dependency updates for Go modules and GitHub Actions; also remove the `renovate[bot]` CI skip so its PRs are tested _(AUDIT INFRA-5)_
+- [x] **Renovate** — automated dependency updates for Go modules and GitHub Actions, `k8s.io/*` grouped, CI no longer skipped for its PRs _(v0.5.0, AUDIT INFRA-5)_
 - [x] **seccompProfile: RuntimeDefault** — added to pod security context in `values.yaml` _(v0.2.0, AUDIT INFRA-2)_
 - [x] **Security hardening batch** — HTTP server timeouts, generic errors on suspend/resume, nosniff/XFO/Referrer-Policy headers, CSRF `Secure` flag + POST logout, split ClusterRole verbs _(v0.2.0, AUDIT SEC-20/21/23-partial/25/26)_
 - [ ] **CSP + HSTS** — remaining SEC-23 headers; CSP requires moving inline scripts to nonce'd blocks
