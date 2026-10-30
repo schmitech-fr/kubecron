@@ -131,7 +131,7 @@ See `.env.example`. Key variables:
 | `KUBECONFIG_DIR` | `/etc/kubecron/kubeconfigs` | One kubeconfig file per cluster |
 | `DB_PATH` | `/data/kubecron.db` | SQLite database file |
 | `PORT` | `8080` | HTTP listen port |
-| `RETENTION_DAYS` | `90` | Days of run history (job_runs) to keep |
+| `RETENTION_DAYS` | `180` | Days of run history (job_runs) to keep |
 | `LOG_RETENTION_DAYS` | `14` | Days of raw log lines to keep (run metadata kept until RETENTION_DAYS) |
 | `METRICS_SAMPLE_INTERVAL` | `15` | Resource sampling interval (seconds) |
 | `OIDC_ENABLED` | `false` | Enable OIDC/SSO |

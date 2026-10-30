@@ -194,7 +194,7 @@ Discovery. Call it first.
     "run_history": true, "run_logs": true, "resource_samples": true,
     "live_log_stream": true, "mutations": false
   },
-  "retention": { "run_days": 90, "log_days": 14 },
+  "retention": { "run_days": 180, "log_days": 14 },
   "sample_interval_seconds": 15,
   "clusters": [
     { "id": "prod-eu", "name": "prod-eu", "metrics_enabled": true,

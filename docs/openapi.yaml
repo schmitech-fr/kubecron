@@ -566,7 +566,7 @@ components:
         run_days:
           type: integer
           description: Days of run metadata kept (`RETENTION_DAYS`).
-          examples: [90]
+          examples: [180]
         log_days:
           type: integer
           description: |
