@@ -307,6 +307,7 @@ paths:
             text/plain:
               schema: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/runs/{id}/stream:
     get:

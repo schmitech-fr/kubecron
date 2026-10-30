@@ -359,7 +359,8 @@ follows the rest.
 
 ### `GET /api/v1/runs/{id}/logs.txt`
 
-The same body as `text/plain`, for saving to a file.
+The same body as `text/plain`, for saving to a file. An unknown run is a `404`,
+not an empty file.
 
 ### `GET /api/v1/runs/{id}/stream`
 
