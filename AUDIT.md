@@ -1,5 +1,7 @@
 # KubeCron — Full Audit
 
+> **Historical.** Audit pass of 2026-05-21, superseded by [`docs/AUDIT.md`](docs/AUDIT.md), which carries the current findings.
+
 Date: 2026-05-21
 Scope: source code (`cmd/`, `internal/`, `migrations/`), Helm chart, CI/CD, Dockerfile.
 Axes: security, bugs, dead code, maintainability, factorisation, coverage, feature coverage.

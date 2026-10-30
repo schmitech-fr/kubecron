@@ -1,5 +1,7 @@
 # KubeCron — Claude Code Specification
 
+> **Historical.** The original build specification. It no longer describes the code (templ, a 7-day retention, …); see `README.md`, `CLAUDE.md` and `docs/`.
+
 ## Project Overview
 
 KubeCron is a self-hosted, single-binary Go application deployed on a Kubernetes "hub" cluster
