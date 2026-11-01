@@ -65,6 +65,46 @@ api:
   # Inline token. Generate one with: openssl rand -hex 32
   token: ""
 
+# Alerts on failed, missed and stuck runs, with the run's last log lines.
+# Off until at least one destination is set. Runs in both modes.
+alerts:
+  # Which kinds to send: any of failed, missed, stuck.
+  on: "failed,missed,stuck"
+  # Last log lines attached to each alert; 0 sends none. Logs can hold
+  # secrets: lower this when the channel is wider than who may read them.
+  logLines: 20
+  # The dashboard's external URL, to link each alert to its run.
+  baseURL: ""
+  # Name of an existing Secret with any of the keys webhook-url,
+  # slack-webhook-url, teams-webhook-url, smtp-password. Takes precedence over
+  # the inline values below, which otherwise create one.
+  existingSecret: ""
+  # Generic webhook: receives the alert as JSON.
+  webhookURL: ""
+  # Slack incoming webhook (https://hooks.slack.com/services/…).
+  slackWebhookURL: ""
+  # Microsoft Teams Workflows webhook (Adaptive Card payload).
+  teamsWebhookURL: ""
+  smtp:
+    host: ""
+    port: 587          # 465 = implicit TLS; otherwise STARTTLS when offered
+    username: ""
+    password: ""
+    from: ""
+    to: ""             # comma-separated
+
+# Grafana dashboard for the kubecron_* metrics, shipped as a ConfigMap that the
+# Grafana sidecar (kube-prometheus-stack, grafana chart) picks up by label. The
+# same JSON is in charts/kubecron/dashboards/kubecron.json for a manual import.
+grafana:
+  dashboard:
+    enabled: false
+    # Namespace the sidecar watches; empty = the release namespace.
+    namespace: ""
+    labels:
+      grafana_dashboard: "1"
+    annotations: {}
+
 # Name this cluster reports as when KubeCron runs on its own ServiceAccount
 # (mode: server, no kubeconfigs) — the one-collector-per-cluster shape.
 #

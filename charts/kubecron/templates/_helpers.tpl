@@ -122,6 +122,18 @@ configured. Callers use emptiness as the test for "is a front door configured".
 {{- end }}
 
 {{/*
+The Secret holding alert destinations: an existing one, or the chart's own
+when any destination is given inline. Empty when neither.
+*/}}
+{{- define "kubecron.alertsSecretName" -}}
+{{- if .Values.alerts.existingSecret }}
+{{- .Values.alerts.existingSecret }}
+{{- else if or .Values.alerts.webhookURL .Values.alerts.slackWebhookURL .Values.alerts.teamsWebhookURL .Values.alerts.smtp.password }}
+{{- printf "%s-alerts" (include "kubecron.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
 Whether /api/v1 can actually be reached by a program, which is the only honest
 condition for advertising this Service to a console.
 
