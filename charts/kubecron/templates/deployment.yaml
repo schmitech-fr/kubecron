@@ -81,6 +81,42 @@ spec:
               name: {{ include "kubecron.apiTokenSecretName" . }}
               key: api-token
         {{- end }}
+        {{- with .Values.alerts }}
+        - name: ALERT_ON
+          value: {{ .on | quote }}
+        - name: ALERT_LOG_LINES
+          value: {{ .logLines | quote }}
+        {{- with .baseURL }}
+        - name: ALERT_BASE_URL
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .smtp.host }}
+        - name: ALERT_SMTP_HOST
+          value: {{ . | quote }}
+        - name: ALERT_SMTP_PORT
+          value: {{ $.Values.alerts.smtp.port | quote }}
+        - name: ALERT_SMTP_USERNAME
+          value: {{ $.Values.alerts.smtp.username | quote }}
+        - name: ALERT_SMTP_FROM
+          value: {{ required "alerts.smtp.from is required when alerts.smtp.host is set" $.Values.alerts.smtp.from | quote }}
+        - name: ALERT_SMTP_TO
+          value: {{ required "alerts.smtp.to is required when alerts.smtp.host is set" $.Values.alerts.smtp.to | quote }}
+        {{- end }}
+        {{- end }}
+        {{- /* Destinations are secrets (a webhook URL is its own credential), so
+               they come from a Secret; optional, so it need only hold the
+               keys in use. */}}
+        {{- with include "kubecron.alertsSecretName" . }}
+        {{- $secret := . }}
+        {{- range $env, $key := dict "ALERT_WEBHOOK_URL" "webhook-url" "ALERT_SLACK_WEBHOOK_URL" "slack-webhook-url" "ALERT_TEAMS_WEBHOOK_URL" "teams-webhook-url" "ALERT_SMTP_PASSWORD" "smtp-password" }}
+        - name: {{ $env }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ $secret }}
+              key: {{ $key }}
+              optional: true
+        {{- end }}
+        {{- end }}
         {{- if eq (include "kubecron.mode" .) "server" }}
         {{- /* Names the cluster when the pod watches itself through its own
                ServiceAccount, which is the shape a per-cluster collector runs

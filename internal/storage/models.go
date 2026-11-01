@@ -58,6 +58,11 @@ type JobRun struct {
 	MaxCPUMillicores *int64     `json:"max_cpu_millicores,omitempty"`
 	AvgMemoryBytes   *int64     `json:"avg_memory_bytes,omitempty"`
 	MaxMemoryBytes   *int64     `json:"max_memory_bytes,omitempty"`
+	// PodWaitingReason is why the run's pod is blocked (CrashLoopBackOff,
+	// ImagePullBackOff, Unschedulable, …), nil when it is not waiting.
+	// PodWaitingSince is when that reason was first seen.
+	PodWaitingReason *string    `json:"pod_waiting_reason,omitempty"`
+	PodWaitingSince  *time.Time `json:"pod_waiting_since,omitempty"`
 }
 
 type ResourceSample struct {

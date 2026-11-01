@@ -10,10 +10,39 @@ _Nothing yet._
 
 ---
 
-## [0.5.0] - 2026-10-30
+## [0.5.0] - 2026-11-01
 
 First tagged release: `v0.5.0` publishes image `ghcr.io/schmitech-fr/kubecron:0.5.0`.
 Versions below were never tagged.
+
+### Added
+
+- **Alerts with the log attached.** Slack (incoming webhook), Microsoft Teams
+  (Workflows webhook, Adaptive Card), SMTP and a generic JSON webhook, on a
+  **failed** run, a **missed** scheduled run and a **stuck** run. Each message
+  carries the run's last log lines (`ALERT_LOG_LINES`, default 20), how long the
+  CronJob usually takes, and a link to the run (`ALERT_BASE_URL`). Alerts are
+  evaluated from stored state every 30 s and recorded in a new `alerts_sent`
+  table, so each goes out once, across restarts. A missed run alerts once per
+  silence. Runs marked failed by the startup recovery are not reported. Off
+  until a destination is set; chart values under `alerts.*`, destinations in a
+  Secret. New counter `kubecron_alerts_sent_total{kind,notifier,result}`.
+- **Stuck-run detection.** A running run is stuck when its pod has been in
+  CrashLoopBackOff, ImagePullBackOff, ErrImagePull, InvalidImageName,
+  CreateContainer(Config)Error or Unschedulable for 5 minutes, or when it has
+  run longer than `max(p95 × 2, median × 3, 1 min)` of the CronJob's last 20
+  finished runs (at least 5 needed). One rule (`internal/runcheck`) behind a
+  `stuck` badge on the CronJob row, the new gauge `kubecron_run_stuck`, and the
+  stuck alerts. The pod watcher now records the pod's waiting reason
+  (migration 000007).
+- `/api/v1` (additive): CronJobs carry `stuck` and `stuck_reason`, runs carry
+  `pod_waiting_reason` and `pod_waiting_since`, and the discovery document
+  advertises `capabilities.stuck_detection`.
+- **Grafana dashboard** for the `kubecron_*` metrics:
+  `charts/kubecron/dashboards/kubecron.json`, or `grafana.dashboard.enabled=true`
+  to ship it as a ConfigMap labelled for the Grafana sidecar. Fleet tiles
+  (failing, missed, stuck, running, suspended), a "needing attention" table,
+  run outcomes, durations, resource peaks, and KubeCron's own health.
 
 ### Changed
 

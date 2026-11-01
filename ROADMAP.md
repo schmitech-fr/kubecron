@@ -36,13 +36,13 @@ for engineering findings behind the AUDIT ids, see [`docs/AUDIT.md`](docs/AUDIT.
 - [ ] **S3 log storage** — store log lines in S3/object storage instead of SQLite for unlimited retention
 - [x] **Global "what is wrong" page** — status-first summary on both the fleet overview and the cluster view: success rate, failures (and how many CronJobs they came from), in-flight and suspended counts, plus rankings by failures / mean duration / peak CPU / peak memory over 24 h, 7 d or 30 d _(v0.3.0, PRODUCT §3.1)_. Overrunning-run detection is still open — see "Stuck / runaway run detection" below
 - [ ] **Collector: per-cluster NetworkPolicy in the chart** — a collector should only be reachable from the namespaces that read it; today `mode: server` relies on ClusterIP plus the bearer token (AUDIT SEC-30)
-- [ ] **Alerting with log context** — webhook/Slack/Teams/SMTP on failure, missed run and runaway duration, with the failing pod's last log lines attached — the part Alertmanager cannot do _(PRODUCT §3.2)_
-- [ ] **Stuck / runaway run detection** — flag a run exceeding `max(p95 × 2, median × 3)` of its own history _(PRODUCT §3.3)_
+- [x] **Alerting with log context** — webhook/Slack/Teams/SMTP on failure, missed run and runaway duration, with the failing pod's last log lines attached — the part Alertmanager cannot do _(v0.5.0, PRODUCT §3.2)_
+- [x] **Stuck / runaway run detection** — flag a run exceeding `max(p95 × 2, median × 3)` of its own history, or a pod blocked in CrashLoopBackOff/ImagePullBackOff/Unschedulable _(v0.5.0, PRODUCT §3.3)_
 - [ ] **Daily digest** — one scheduled summary per team: what failed, what slowed down, what stopped running _(PRODUCT §3.4)_
 - [ ] **Cross-run log search** — SQLite FTS5 over `log_lines`, searchable across runs and clusters, over logs of pods that no longer exist _(PRODUCT §4.1)_
 - [ ] **Failure fingerprinting** — normalise and group error signatures to show recurrence across clusters _(PRODUCT §4.2)_
 - [ ] **Right-sizing + cost** — join stored requests/limits against observed peaks; cost per run from `resource_samples` _(PRODUCT §5.1–5.2)_
-- [ ] **Grafana dashboard** — pre-built dashboard JSON for `kubecron_*` metrics (16 families as of v0.3.0, incl. `kubecron_cronjob_missed` and `kubecron_runs_active`)
+- [x] **Grafana dashboard** — pre-built dashboard JSON for `kubecron_*` metrics, shipped in the chart _(v0.5.0)_
 - [x] **Collector mode** — `KUBECRON_MODE=server` runs the same binary headless: read-only versioned `/api/v1`, no HTML, no mutating route, no mutating RBAC. One per cluster on its own ServiceAccount, discovered by Service label and read on demand by a console (KubeDeck) that was not running when a run happened. Contract in `docs/COLLECTOR-API.md` _(v0.4.0)_
 - [x] **Pagination** — cursor-based "Load more" for run history; heatmap click-to-filter by day; blue "running" tile indicator _(v0.2.0; the cursor query itself was fixed in v0.4.0 — AUDIT BUG-21)_
 - [ ] **CronJob annotations** — display description, owner, runbook link from K8s annotations

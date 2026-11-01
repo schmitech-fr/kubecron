@@ -21,7 +21,7 @@ Collection is identical in both modes — same informers, sampler, log capture, 
 - **Kubernetes**: `k8s.io/client-go` informers (CronJob, Job, Pod), MetricsClient for resource sampling
 - **Frontend**: HTMX 2.x (CDN) + custom CSS (`internal/ui/static/app.css`, embedded) + Chart.js (CDN) — no Node.js build step
 - **Auth**: OIDC optional (`coreos/go-oidc/v3` + `golang.org/x/oauth2`); HMAC-signed session cookie, 24 h TTL
-- **Metrics**: Prometheus via `prometheus/client_golang`; 16 wired metric families exposed at `/metrics`. Gauges are re-derived from the DB by `metrics.StateCollector` every 30 s so they survive a restart; counters/histograms stay event-driven
+- **Metrics**: Prometheus via `prometheus/client_golang`; 18 wired metric families exposed at `/metrics`. Gauges are re-derived from the DB by `metrics.StateCollector` every 30 s so they survive a restart; counters/histograms stay event-driven
 - **Infra**: Two-stage Dockerfile (`golang:1.27-alpine` build → `gcr.io/distroless/static:nonroot`), CI with golangci-lint + SBOM + cosign; images currently `linux/amd64` only (arm64 planned — AUDIT INFRA-3)
 
 ---
@@ -74,8 +74,14 @@ internal/
     queries.go                # All SQL operations (upsert, list, update, delete)
     retention.go              # Background cleanup (delete runs older than RETENTION_DAYS)
   metrics/
-    metrics.go                # Prometheus collectors (16 families, all wired)
+    metrics.go                # Prometheus collectors (18 families, all wired)
     collector.go              # StateCollector: re-derives gauges from stored state every 30 s (OBS-3)
+  runcheck/
+    stuck.go                  # The one stuck-run rule: badge, kubecron_run_stuck, alerts
+  alert/
+    evaluator.go              # Every 30 s: failed / missed / stuck → notifiers, once (alerts_sent table)
+    notifier.go               # Webhook (JSON), Slack, Teams (Adaptive Card), SMTP
+    config.go                 # ALERT_* environment
   schedule/
     next.go                   # Compute next N runs from cron expression
   ui/
@@ -142,18 +148,22 @@ See `.env.example`. Key variables:
 | `OIDC_SESSION_KEY` | _(empty)_ | Any string ≥32 chars; SHA-256 derived internally (store in K8s Secret) |
 | `OIDC_ALLOWED_EMAILS` | _(empty)_ | Comma-separated allow-list of emails permitted to log in (empty = any account) |
 | `OIDC_OPERATOR_EMAILS` | _(empty)_ | Comma-separated emails allowed to suspend/resume/trigger; others read-only (empty = all operators) |
+| `ALERT_SLACK_WEBHOOK_URL` / `ALERT_TEAMS_WEBHOOK_URL` / `ALERT_WEBHOOK_URL` | _(empty)_ | Alert destinations (secrets) |
+| `ALERT_SMTP_HOST` / `_PORT` / `_USERNAME` / `_PASSWORD` / `_FROM` / `_TO` | _(empty)_ / `587` | SMTP destination |
+| `ALERT_ON` / `ALERT_LOG_LINES` / `ALERT_BASE_URL` | `failed,missed,stuck` / `20` / _(empty)_ | What to send, log lines attached, dashboard link base |
 
 ---
 
 ## Database Schema
 
-Tables: `clusters`, `cronjobs`, `job_runs`, `resource_samples`, `log_lines`.
+Tables: `clusters`, `cronjobs`, `job_runs`, `resource_samples`, `log_lines`, `alerts_sent`.
 
 - `clusters` — one row per kubeconfig file; `metrics_enabled` flag set at startup and re-probed every 5 min; `deleted_at` set when the kubeconfig is removed
 - `cronjobs` — synced from informer; stores schedule, `time_zone` (from `spec.timeZone`), suspended state, resource requests/limits, `deleted_at`
-- `job_runs` — one row per CronJob execution; status: `running` → `succeeded`/`failed`; stores avg/max CPU+RAM
+- `job_runs` — one row per CronJob execution; status: `running` → `succeeded`/`failed`; stores avg/max CPU+RAM and the pod's current waiting reason (stuck detection)
 - `resource_samples` — raw PodMetrics samples (15 s interval) linked to a `job_run`
 - `log_lines` — streamed pod log lines linked to a `job_run`
+- `alerts_sent` — one row per delivered alert `(kind, subject)`, so a restart neither repeats nor forgets one; purged with run history
 
 Migrations are embedded SQL files in `migrations/` applied at startup via `embed.FS`.
 

@@ -192,7 +192,7 @@ Discovery. Call it first.
   "read_only": true,
   "capabilities": {
     "run_history": true, "run_logs": true, "resource_samples": true,
-    "live_log_stream": true, "mutations": false
+    "live_log_stream": true, "mutations": false, "stuck_detection": true
   },
   "retention": { "run_days": 180, "log_days": 14 },
   "sample_interval_seconds": 15,
@@ -227,6 +227,7 @@ run and 7-day statistics folded in.
     "suspended": false,
     "next_run_at": "2026-08-22T00:00:00Z",
     "missed": false,
+    "stuck": false,
     "last_successful_time": "2026-08-21T00:00:31Z",
     "resources": { "cpu_request": "250m", "cpu_limit": "1",
                    "memory_request": "512Mi", "memory_limit": "1Gi" },
@@ -243,6 +244,12 @@ run and 7-day statistics folded in.
 - `missed` means the previous scheduled occurrence produced no run *this
   collector saw*. It is only meaningful because something was watching; do not
   derive it from history alone.
+- `stuck` means the latest run is blocked (CrashLoopBackOff, ImagePullBackOff,
+  Unschedulable… for 5 min or more) or running past
+  `max(p95 × 2, median × 3, 1 min)` of its last 20 finished runs; `stuck_reason`
+  says which. Runs carry `pod_waiting_reason` / `pod_waiting_since`. All of it
+  only when `capabilities.stuck_detection` is true: without it, absent is not
+  "not stuck".
 - `resources` are Kubernetes quantity strings, empty when unset. Never a
   placeholder — a consumer needs the absence, not a rendering of it.
 - Soft-deleted CronJobs are excluded, but their run history stays reachable.
@@ -404,6 +411,8 @@ All CronJob-scoped families carry `cluster`, `namespace`, `cronjob`.
 | `kubecron_cronjob_suspended` | gauge | — | 1 = suspended |
 | `kubecron_cronjob_missed` | gauge | — | 1 = the last scheduled tick produced no run |
 | `kubecron_runs_active` | gauge | — | Runs currently executing |
+| `kubecron_run_stuck` | gauge | — | 1 = the latest run is stuck (same rule as `stuck` above) |
+| `kubecron_alerts_sent_total` | counter | `kind`, `notifier`, `result` only | Alert deliveries; `result` is `ok` or `error` |
 | `kubecron_cluster_cronjobs` | gauge | `cluster` only | Non-deleted CronJobs known for the cluster |
 | `kubecron_cluster_metrics_api_available` | gauge | `cluster` only | 1 = the Metrics API answered the last probe |
 | `kubecron_build_info` | gauge | `version` | Always 1 |

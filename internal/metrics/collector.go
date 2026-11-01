@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/kubecron/kubecron/internal/runcheck"
 	"github.com/kubecron/kubecron/internal/schedule"
 	"github.com/kubecron/kubecron/internal/storage"
 )
@@ -100,9 +101,8 @@ func (c *StateCollector) collectCluster(
 	if err != nil {
 		return err
 	}
-	// durationLimit 1: this pass needs each CronJob's last run and nothing from
-	// the sparkline history, so ask for the smallest slice the query supports.
-	summaries, err := c.store.GetCronJobSummaries(ctx, cl.ID, 1)
+	// The duration history is the stuck-run baseline (runcheck.HistoryRuns).
+	summaries, err := c.store.GetCronJobSummaries(ctx, cl.ID, runcheck.HistoryRuns)
 	if err != nil {
 		return err
 	}
@@ -154,6 +154,7 @@ func (c *StateCollector) collectCronJob(
 	}
 
 	LastRunTimestamp.WithLabelValues(labels...).Set(float64(last.StartedAt.Unix()))
+	RunStuck.WithLabelValues(labels...).Set(boolGauge(runcheck.Check(last, sum.Durations, now).Stuck))
 
 	// A run still in flight has no outcome, duration, or final resource peak.
 	// Its previous values stay published until it finishes rather than being

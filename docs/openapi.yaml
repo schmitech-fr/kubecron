@@ -539,6 +539,9 @@ components:
     Capabilities:
       type: object
       required: [run_history, run_logs, resource_samples, live_log_stream, mutations]
+      description: |
+        Members may be added. One a consumer does not find is false: an older
+        collector does not have it.
       properties:
         run_history:
           type: boolean
@@ -559,6 +562,12 @@ components:
             perform those itself, against the Kubernetes API, under its own
             authorization — two components able to mutate the same CronJob means two
             authorization models that have to stay in agreement.
+        stuck_detection:
+          type: boolean
+          description: |
+            CronJobs carry `stuck` / `stuck_reason` and runs carry
+            `pod_waiting_reason` / `pod_waiting_since` (since 0.5.0). Without it
+            those fields are absent, and that absence says nothing about the run.
 
     Retention:
       type: object
@@ -640,6 +649,18 @@ components:
             The previous scheduled occurrence produced no run *this collector saw*.
             Only meaningful because something was watching: do not derive it from
             history alone, and do not report it for any period before `observed_since`.
+        stuck:
+          type: boolean
+          description: |
+            The latest run is still running and is stuck: its pod has been blocked
+            (CrashLoopBackOff, ImagePullBackOff, Unschedulable, …) for 5 minutes or
+            more, or it has run longer than max(p95 × 2, median × 3, 1 min) of the
+            CronJob's last 20 finished runs (needs at least 5). Present only when
+            `capabilities.stuck_detection`.
+        stuck_reason:
+          type: string
+          description: Why, in one sentence. Omitted when `stuck` is false.
+          examples: ["running for 2h05m, usually 4m00s"]
         last_successful_time:
           type: [string, "null"]
           format: date-time
@@ -699,8 +720,9 @@ components:
           type: string
           enum: [scheduled, manual]
           description: |
-            `manual` is a run created by hand. It is not owned by the CronJob and
-            ignores `concurrencyPolicy` — worth saying in any UI that offers one.
+            `manual` is a run created by hand. Since 0.5.0 its Job is owned by the
+            CronJob, as with `kubectl create job --from`, but it still ignores
+            `concurrencyPolicy` — worth saying in any UI that offers one.
         started_at: { type: string, format: date-time }
         finished_at:
           type: [string, "null"]
@@ -730,6 +752,17 @@ components:
         max_cpu_millicores: { type: [integer, "null"], format: int64 }
         avg_memory_bytes: { type: [integer, "null"], format: int64 }
         max_memory_bytes: { type: [integer, "null"], format: int64 }
+        pod_waiting_reason:
+          type: string
+          description: |
+            Why the run's pod is blocked right now (a container waiting reason such
+            as `CrashLoopBackOff`, or `Unschedulable`). Omitted when it is not
+            waiting — which a consumer may only conclude when
+            `capabilities.stuck_detection` is true.
+        pod_waiting_since:
+          type: string
+          format: date-time
+          description: When `pod_waiting_reason` was first seen. Omitted with it.
 
     RunStats:
       type: object
