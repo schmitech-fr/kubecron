@@ -26,7 +26,7 @@ Versions below were never tagged.
   `vX.Y.Z-rc.N`. `main` and `<sha>` images still publish on every push to `main`.
 - Go floor raised to 1.27 (`go.mod`), matching CI and the Dockerfile.
 - Dependencies: `k8s.io/*` 0.37.2, `go-oidc/v3` 3.21.0, `oauth2` 0.37.0,
-  `modernc.org/sqlite` 1.61.0, `prometheus/client_golang` 1.25.0,
+  `modernc.org/sqlite` 1.61.1, `prometheus/client_golang` 1.25.0,
   `golang.org/x/net` 0.62.0, `anchore/sbom-action` 0.24.3.
 - CI runs `govulncheck` on every build (AUDIT SUP-1, partial: no image scan
   yet) and no longer skips Renovate's pull requests (INFRA-5). Renovate groups
