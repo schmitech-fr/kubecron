@@ -182,7 +182,8 @@ const jobRunCols = `id, cronjob_id, pod_name, node_name, container_image,
 	       trigger, started_at, finished_at, status, exit_code,
 	       retry_count, log_size_bytes, duration_ms,
 	       avg_cpu_millicores, max_cpu_millicores,
-	       avg_memory_bytes, max_memory_bytes`
+	       avg_memory_bytes, max_memory_bytes,
+	       pod_waiting_reason, pod_waiting_since`
 
 func (s *SQLiteStore) UpsertJobRun(ctx context.Context, r JobRun) error {
 	_, err := s.db.ExecContext(ctx, `
@@ -714,8 +715,11 @@ func (s *SQLiteStore) GetResourceSamples(ctx context.Context, runID string) ([]R
 // ---------------------------------------------------------------------------
 
 func (s *SQLiteStore) DeleteOldData(ctx context.Context, before time.Time) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM job_runs WHERE started_at < ?`, before)
-	return wrapErr("DeleteOldData", err)
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM job_runs WHERE started_at < ?`, before); err != nil {
+		return wrapErr("DeleteOldData", err)
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM alerts_sent WHERE sent_at < ?`, before)
+	return wrapErr("DeleteOldData alerts", err)
 }
 
 func (s *SQLiteStore) DeleteOldLogLines(ctx context.Context, before time.Time) error {
@@ -789,6 +793,8 @@ func scanJobRun(r rowScanner) (*JobRun, error) {
 	var exitCode sql.NullInt64
 	var durationMs sql.NullInt64
 	var avgCPU, maxCPU, avgMem, maxMem sql.NullInt64
+	var waitingReason sql.NullString
+	var waitingSince sql.NullTime
 
 	err := r.Scan(
 		&jr.ID, &jr.CronJobID, &jr.PodName,
@@ -797,9 +803,16 @@ func scanJobRun(r rowScanner) (*JobRun, error) {
 		&jr.Status, &exitCode,
 		&jr.RetryCount, &jr.LogSizeBytes, &durationMs,
 		&avgCPU, &maxCPU, &avgMem, &maxMem,
+		&waitingReason, &waitingSince,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if waitingReason.Valid {
+		jr.PodWaitingReason = &waitingReason.String
+	}
+	if waitingSince.Valid {
+		jr.PodWaitingSince = &waitingSince.Time
 	}
 	if nodeName.Valid {
 		jr.NodeName = &nodeName.String
@@ -967,4 +980,73 @@ func wrapErr(op string, err error) error {
 		return nil
 	}
 	return fmt.Errorf("storage.%s: %w", op, err)
+}
+
+// UpdateJobRunWaiting records why a run's pod is blocked. An empty reason
+// clears it. The timestamp is kept while the reason stays the same, so it
+// marks when the pod started waiting for that reason, not the last update.
+// SQLite evaluates every SET expression against the row as it was before the
+// statement, which is what lets pod_waiting_since compare the old reason.
+func (s *SQLiteStore) UpdateJobRunWaiting(ctx context.Context, id, reason string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE job_runs
+		SET pod_waiting_since = CASE
+		        WHEN ?1 = '' THEN NULL
+		        WHEN pod_waiting_reason IS ?1 THEN pod_waiting_since
+		        ELSE ?2
+		    END,
+		    pod_waiting_reason = NULLIF(?1, '')
+		WHERE id = ?3`,
+		reason, at, id,
+	)
+	return wrapErr("UpdateJobRunWaiting", err)
+}
+
+// ListFailedRunsSince returns runs that failed at or after since, oldest first.
+//
+// Runs marked failed by the startup recovery (exit code -1, see MarkRunFailed)
+// are left out: that mark means "KubeCron was not watching when this ended",
+// not "the job failed", and alerting on it would report every restart.
+func (s *SQLiteStore) ListFailedRunsSince(ctx context.Context, since time.Time) ([]JobRun, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+jobRunCols+` FROM job_runs
+		 WHERE status = 'failed' AND finished_at >= ? AND (exit_code IS NULL OR exit_code <> -1)
+		 ORDER BY finished_at`,
+		since,
+	)
+	if err != nil {
+		return nil, wrapErr("ListFailedRunsSince", err)
+	}
+	defer rows.Close()
+
+	var out []JobRun
+	for rows.Next() {
+		r, err := scanJobRun(rows)
+		if err != nil {
+			return nil, wrapErr("ListFailedRunsSince scan", err)
+		}
+		out = append(out, *r)
+	}
+	return out, wrapErr("ListFailedRunsSince rows", rows.Err())
+}
+
+// AlertSent reports whether an alert of this kind was already delivered for
+// subject.
+func (s *SQLiteStore) AlertSent(ctx context.Context, kind, subject string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM alerts_sent WHERE kind = ? AND subject = ?`, kind, subject,
+	).Scan(&n)
+	return n > 0, wrapErr("AlertSent", err)
+}
+
+// RecordAlert marks an alert as delivered. Recording the same alert twice is
+// not an error.
+func (s *SQLiteStore) RecordAlert(ctx context.Context, kind, subject string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO alerts_sent(kind, subject, sent_at) VALUES (?, ?, ?)
+		 ON CONFLICT(kind, subject) DO NOTHING`,
+		kind, subject, at,
+	)
+	return wrapErr("RecordAlert", err)
 }
