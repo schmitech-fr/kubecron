@@ -14,6 +14,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	"github.com/kubecron/kubecron/internal/alert"
 	"github.com/kubecron/kubecron/internal/api"
 	"github.com/kubecron/kubecron/internal/auth"
 	"github.com/kubecron/kubecron/internal/cluster"
@@ -35,7 +36,7 @@ type Config struct {
 	KubeconfigDir         string `env:"KUBECONFIG_DIR"          envDefault:"/etc/kubecron/kubeconfigs"`
 	DBPath                string `env:"DB_PATH"                 envDefault:"/data/kubecron.db"`
 	Port                  int    `env:"PORT"                    envDefault:"8080"`
-	RetentionDays         int    `env:"RETENTION_DAYS"          envDefault:"90"`
+	RetentionDays         int    `env:"RETENTION_DAYS"          envDefault:"180"`
 	LogRetentionDays      int    `env:"LOG_RETENTION_DAYS"      envDefault:"14"`
 	MetricsSampleInterval int    `env:"METRICS_SAMPLE_INTERVAL" envDefault:"15"` // seconds
 	// ClusterID names the cluster when KubeCron runs on its own ServiceAccount
@@ -47,6 +48,9 @@ type Config struct {
 	// every request in server mode. Ignored in UI mode, which uses OIDC.
 	APIToken string `env:"API_TOKEN"`
 	OIDC     auth.Config
+	// Alert is the ALERT_* environment; with no destination set, alerting is
+	// off.
+	Alert alert.Config
 }
 
 func main() {
@@ -190,7 +194,20 @@ func main() {
 	metrics.SetBuildInfo(version.Version)
 	go metrics.NewStateCollector(store, metrics.DefaultCollectInterval).Run(ctx)
 
-	// 11. HTTP server.
+	// 11. Alerts on failed, missed and stuck runs. Evaluated from stored state,
+	// like the gauges above, so a restart neither drops nor repeats one; runs
+	// in both modes because collection does.
+	alerts, err := alert.NewEvaluator(store, cfg.Alert)
+	if err != nil {
+		slog.Error("alert configuration invalid", "err", err)
+		os.Exit(1)
+	}
+	if alerts != nil {
+		slog.Info("alerting enabled", "notifiers", alerts.Names(), "on", cfg.Alert.On)
+		go alerts.Run(ctx, alert.DefaultInterval)
+	}
+
+	// 12. HTTP server.
 	info := api.CollectorInfo{
 		Mode:                  mode,
 		RetentionDays:         cfg.RetentionDays,
@@ -206,7 +223,7 @@ func main() {
 		}
 	}()
 
-	// 12. Block until shutdown signal, then drain gracefully.
+	// 13. Block until shutdown signal, then drain gracefully.
 	<-ctx.Done()
 	slog.Info("shutdown signal received, draining (timeout 30s)…")
 

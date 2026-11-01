@@ -29,7 +29,9 @@ CronJobs are invisible by default. You define a schedule, deploy it, and hope it
 - **Multi-cluster** — one kubeconfig file per cluster in a directory; all clusters shown in a unified dashboard
 - **Focus rankings** — every view leads with success rate, failures, in-flight and suspended counts, then ranks CronJobs by most failures, longest mean duration, and highest peak CPU / memory over 24 h, 7 d or 30 d. Fleet-wide when you run several clusters, per-cluster on the cluster view
 - **OIDC authentication** — optional SSO via Keycloak, Dex, Google, or any OIDC provider
-- **Prometheus metrics** — 16 metric families at `/metrics` for Grafana integration, including missed-schedule and in-flight-run gauges. Gauges are re-derived from the database every 30 s, so they keep reporting across a restart instead of going blank until each CronJob next fires
+- **Alerts with the log attached** — Slack, Teams, SMTP or a generic JSON webhook when a run fails, a scheduled run is missed, or a run is stuck; each message carries the run's last log lines and a link to it. Delivered once, even across restarts. See [Alerts](#alerts)
+- **Stuck-run detection** — a run is flagged when its pod sits in CrashLoopBackOff, ImagePullBackOff, Unschedulable… for 5 min, or when it runs past `max(p95 × 2, median × 3)` of its CronJob's own history. Shown as a badge, exported as `kubecron_run_stuck`, alertable
+- **Prometheus metrics** — 18 metric families at `/metrics`, including missed-schedule, stuck-run and in-flight-run gauges, and a ready-made Grafana dashboard (`charts/kubecron/dashboards/kubecron.json`, or `grafana.dashboard.enabled=true` for the sidecar). Gauges are re-derived from the database every 30 s, so they keep reporting across a restart instead of going blank until each CronJob next fires
 - **Collector mode** — the same binary, run headless as a per-cluster recorder that serves a read-only versioned API instead of a dashboard. See below
 
 ---
@@ -89,21 +91,14 @@ OpenAPI 3.1 spec at **[docs/openapi.yaml](docs/openapi.yaml)**.
 
 ### Helm (recommended)
 
-```bash
-# Encode your kubeconfig(s) in base64 — one per cluster
-KC=$(kubectl config view --minify --raw | base64 -w0)
-
-helm install kubecron oci://ghcr.io/schmitech-fr/charts/kubecron \
-  --namespace kubecron --create-namespace \
-  --set "kubeconfigs.data.my-cluster=$KC"
-```
-
-Or from source:
+The chart is not published to a registry yet; install it from a tagged checkout
+(the chart's `appVersion` selects the matching image):
 
 ```bash
-git clone https://github.com/schmitech-fr/kubecron.git
+git clone --branch v0.5.0 https://github.com/schmitech-fr/kubecron.git
 cd kubecron
 
+# Encode your kubeconfig(s) in base64 — one per cluster
 KC=$(kubectl config view --minify --raw | base64 -w0)
 
 helm install kubecron ./charts/kubecron \
@@ -116,13 +111,17 @@ Key Helm values:
 
 | Value | Default | Description |
 |---|---|---|
-| `config.retentionDays` | `90` | Days of run history (metadata) to keep |
+| `config.retentionDays` | `180` | Days of run history (metadata) to keep |
 | `config.logRetentionDays` | `14` | Days of raw log lines to keep (≤ `retentionDays`) |
 | `config.metricsSampleInterval` | `15` | Resource sampling interval (seconds) |
 | `persistence.size` | `500Mi` | PVC size for SQLite data |
 | `ingress.enabled` | `false` | Expose via Ingress — requires OIDC, see below |
 | `oidc.enabled` | `false` | Enable OIDC authentication |
 | `security.acknowledgeInsecureExposure` | `false` | Allow external exposure without OIDC (see below) |
+| `alerts.slackWebhookURL` / `teamsWebhookURL` / `webhookURL` | _(empty)_ | Alert destinations (stored in a Secret; or `alerts.existingSecret`) |
+| `alerts.smtp.host` | _(empty)_ | SMTP destination; also `port`, `username`, `password`, `from`, `to` |
+| `alerts.baseURL` | _(empty)_ | Dashboard URL, to link each alert to its run |
+| `grafana.dashboard.enabled` | `false` | Ship the Grafana dashboard as a sidecar-labelled ConfigMap |
 
 > ⚠️ **Exposing KubeCron requires authentication.**
 > KubeCron has no authentication of its own: with `oidc.enabled=false`, *every*
@@ -158,7 +157,7 @@ Open http://localhost:8080.
 ### Local dev
 
 ```bash
-# Requires: Go 1.26+ only — no codegen, no Node.js build step.
+# Requires: Go 1.27+ only — no codegen, no Node.js build step.
 # Place kubeconfig files in dev/kubeconfigs/, then:
 go run ./cmd/kubecron
 ```
@@ -177,7 +176,7 @@ All configuration is via environment variables.
 | `KUBECONFIG_DIR` | `/etc/kubecron/kubeconfigs` | Directory with one kubeconfig file per cluster |
 | `DB_PATH` | `/data/kubecron.db` | SQLite database file path |
 | `PORT` | `8080` | HTTP listen port |
-| `RETENTION_DAYS` | `90` | How many days of run history (metadata) to keep |
+| `RETENTION_DAYS` | `180` | How many days of run history (metadata) to keep |
 | `LOG_RETENTION_DAYS` | `14` | How many days of raw log lines to keep (≤ `RETENTION_DAYS`) |
 | `METRICS_SAMPLE_INTERVAL` | `15` | Resource sampling interval in seconds (requires metrics-server) |
 | `OIDC_ENABLED` | `false` | Enable OIDC/SSO authentication |
@@ -188,8 +187,31 @@ All configuration is via environment variables.
 | `OIDC_SESSION_KEY` | _(empty)_ | ≥32-char random string for session signing (store in a K8s Secret) |
 | `OIDC_ALLOWED_EMAILS` | _(empty)_ | Comma-separated allow-list of emails permitted to log in (empty = any account) |
 | `OIDC_OPERATOR_EMAILS` | _(empty)_ | Comma-separated emails allowed to suspend/resume/trigger; others are read-only (empty = all operators) |
+| `ALERT_SLACK_WEBHOOK_URL` | _(empty)_ | Slack incoming webhook |
+| `ALERT_TEAMS_WEBHOOK_URL` | _(empty)_ | Microsoft Teams Workflows webhook |
+| `ALERT_WEBHOOK_URL` | _(empty)_ | Generic webhook; receives the alert as JSON |
+| `ALERT_SMTP_HOST` / `_PORT` / `_USERNAME` / `_PASSWORD` / `_FROM` / `_TO` | _(empty)_ / `587` | SMTP destination; 465 = implicit TLS, otherwise STARTTLS. `_TO` is comma-separated |
+| `ALERT_ON` | `failed,missed,stuck` | Which kinds to alert on |
+| `ALERT_LOG_LINES` | `20` | Last log lines attached to each alert; `0` = none |
+| `ALERT_BASE_URL` | _(empty)_ | Dashboard URL, to link each alert to its run |
 
 See `.env.example` for a commented template.
+
+### Alerts
+
+Off until a destination is set. Every 30 s KubeCron looks at what it has
+recorded and sends one message per:
+
+- **failed** run (its last log lines, exit code, and how long it usually takes),
+- **missed** run (one message per silence, not one per tick),
+- **stuck** run (the reason: blocked pod, or running far past its usual duration).
+
+Each goes out once — delivery is recorded in the database, so a restart neither
+repeats nor drops one. When every destination fails, an alert is retried for
+five passes, then dropped (`kubecron_alerts_sent_total{result="error"}` counts
+it). Runs KubeCron marked failed because it was down when they ended are not
+reported. **Log lines can contain secrets**: lower `ALERT_LOG_LINES` (or set
+`0`) when the channel is wider than the people who may read the logs.
 
 ---
 

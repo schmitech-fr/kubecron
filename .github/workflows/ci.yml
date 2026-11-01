@@ -17,7 +17,6 @@ concurrency:
 jobs:
   build:
     name: Go build, vet, lint & test
-    if: github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -47,6 +46,14 @@ jobs:
 
       - name: Run golangci-lint
         run: golangci-lint run
+
+      # Fails on any advisory the code actually reaches, stdlib included, so a
+      # vulnerable toolchain or module cannot ship behind a floating base tag.
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
 
   helm-lint:
     name: Helm lint

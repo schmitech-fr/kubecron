@@ -54,6 +54,9 @@ type Store interface {
 	// callers that need the counts but not the rows.
 	CountRunningRuns(ctx context.Context) (map[string]int, error)
 	MarkRunFailed(ctx context.Context, id string) error
+	// UpdateJobRunWaiting records why a run's pod is blocked; "" clears it.
+	UpdateJobRunWaiting(ctx context.Context, id, reason string, at time.Time) error
+	ListFailedRunsSince(ctx context.Context, since time.Time) ([]JobRun, error)
 	AddLogSize(ctx context.Context, id string, bytes int64) error
 	FinalizeResourceUsage(ctx context.Context, runID string) error
 
@@ -63,6 +66,10 @@ type Store interface {
 	// GetLogLinesTail returns the last `limit` lines ordered oldest-first.
 	// If limit <= 0 all lines are returned (equivalent to GetLogLines).
 	GetLogLinesTail(ctx context.Context, runID string, limit int) ([]LogLine, error)
+
+	// Alert delivery bookkeeping, so a restart neither repeats nor forgets.
+	AlertSent(ctx context.Context, kind, subject string) (bool, error)
+	RecordAlert(ctx context.Context, kind, subject string, at time.Time) error
 
 	// Resource sample operations
 	InsertResourceSample(ctx context.Context, runID string, cpuMillicores, memoryBytes int64) error

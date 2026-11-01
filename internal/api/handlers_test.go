@@ -330,6 +330,19 @@ func TestDownloadLogs_Empty(t *testing.T) {
 	}
 }
 
+func TestDownloadLogs_UnknownRun(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	r := httptest.NewRequest("GET", "/api/runs/no-such-run/logs.txt", nil)
+	r.SetPathValue("id", "no-such-run")
+	w := httptest.NewRecorder()
+	h.DownloadLogs(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("want 404 for an unknown run, got %d", w.Code)
+	}
+}
+
 func TestDownloadLogs_WithLines(t *testing.T) {
 	h, store := newTestHandler(t)
 	seedCluster(t, store)
@@ -476,7 +489,14 @@ func TestTrigger_OK(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(jobs.Items) != 1 {
-		t.Errorf("expected 1 job in fake cluster, got %d", len(jobs.Items))
+		t.Fatalf("expected 1 job in fake cluster, got %d", len(jobs.Items))
+	}
+	// Without a CronJob owner the JobHandler ignores the Job and history
+	// limits never collect it.
+	refs := jobs.Items[0].OwnerReferences
+	if len(refs) != 1 || refs[0].Kind != "CronJob" || refs[0].Name != testCJName ||
+		refs[0].Controller == nil || !*refs[0].Controller {
+		t.Errorf("want a controller owner reference to CronJob %q, got %+v", testCJName, refs)
 	}
 	_ = resp // run_id and pod_name depend on fake UID/name generation
 }

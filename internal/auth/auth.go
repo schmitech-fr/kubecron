@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -164,12 +165,14 @@ func (a *Authenticator) RequireOperator(next http.Handler) http.Handler {
 }
 
 // Middleware returns an http.Handler that checks session cookies.
-// Exempt paths: /healthz, /readyz, /metrics, /auth/*.
+// Exempt paths: /healthz, /readyz, /metrics, /auth/*, /static/*.
 // On success, injects the authenticated user's email into the request context.
 func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/healthz" || p == "/readyz" || p == "/metrics" || strings.HasPrefix(p, "/auth/") {
+		// /static/ is the embedded stylesheet and favicon: the logged-out page
+		// links them, and behind the guard they answered with a login redirect.
+		if p == "/healthz" || p == "/readyz" || p == "/metrics" || strings.HasPrefix(p, "/auth/") || strings.HasPrefix(p, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -347,17 +350,23 @@ func (a *Authenticator) parse(cookie string) (session, bool) {
 // safeRedirect returns raw if it is a safe same-origin relative path,
 // or fallback otherwise. Prevents open redirect attacks.
 func safeRedirect(raw, fallback string) string {
-	if strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") {
-		return raw
+	// Browsers read a backslash as a slash, so "/\evil.com" is the
+	// protocol-relative "//evil.com"; control characters (a tab or newline is
+	// stripped before parsing) can smuggle the same shape past the "//" check.
+	if !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") ||
+		strings.ContainsFunc(raw, func(c rune) bool { return c == '\\' || c < 0x20 || c == 0x7f }) {
+		return fallback
 	}
-	return fallback
+	return raw
 }
 
 // redirectToLogin sends the user to /auth/login.
 // For HTMX requests it uses HX-Redirect so the full page navigates instead of
 // injecting the login page into the current HTMX target element.
 func redirectToLogin(w http.ResponseWriter, r *http.Request) {
-	target := "/auth/login?redirect=" + r.URL.RequestURI()
+	// Escaped, or a query string in the original URL ends the redirect
+	// parameter at its first "&".
+	target := "/auth/login?redirect=" + url.QueryEscape(r.URL.RequestURI())
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Redirect", target)
 		w.WriteHeader(http.StatusUnauthorized)

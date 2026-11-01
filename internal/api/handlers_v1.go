@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kubecron/kubecron/internal/runcheck"
 	"github.com/kubecron/kubecron/internal/schedule"
 	"github.com/kubecron/kubecron/internal/storage"
 	"github.com/kubecron/kubecron/internal/version"
@@ -38,7 +39,7 @@ const (
 
 	// v1DefaultRunLimit and v1MaxRunLimit bound the run history page size.
 	// Unbounded is not offered: a CronJob that runs every minute accumulates
-	// ~130 000 rows over the default 90-day retention.
+	// ~260 000 rows over the default 180-day retention.
 	v1DefaultRunLimit = 100
 	v1MaxRunLimit     = 1000
 
@@ -82,6 +83,10 @@ type collectorCapabilities struct {
 	// Mutations: suspend/resume/trigger. False in server mode, by design —
 	// KubeDeck performs those itself against the Kubernetes API.
 	Mutations bool `json:"mutations"`
+	// StuckDetection: CronJobs carry `stuck`, runs carry the pod waiting
+	// reason. A collector without it omits those fields, which must then not
+	// be read as "not stuck".
+	StuckDetection bool `json:"stuck_detection"`
 }
 
 type collectorRetention struct {
@@ -132,6 +137,7 @@ func (h *Handler) Collector(w http.ResponseWriter, r *http.Request) {
 			ResourceSamples: true,
 			LiveLogStream:   true,
 			Mutations:       h.info.Mode.AllowsMutation(),
+			StuckDetection:  true,
 		},
 		Retention: collectorRetention{
 			RunDays: h.info.RetentionDays,
@@ -201,7 +207,12 @@ type cronJobV1 struct {
 	// Missed reports that the previous scheduled occurrence produced no run this
 	// collector saw. It is only meaningful because the collector was watching —
 	// a consumer must not derive it from history alone.
-	Missed             bool              `json:"missed"`
+	Missed bool `json:"missed"`
+	// Stuck reports that the latest run is blocked or running past its
+	// CronJob's usual duration (runcheck). StuckReason says which, and is
+	// empty when Stuck is false.
+	Stuck              bool              `json:"stuck"`
+	StuckReason        string            `json:"stuck_reason,omitempty"`
 	LastSuccessfulTime *time.Time        `json:"last_successful_time,omitempty"`
 	Resources          resourcesV1       `json:"resources"`
 	LastRun            *storage.JobRun   `json:"last_run,omitempty"`
@@ -277,6 +288,10 @@ func (h *Handler) ListCronJobsV1(w http.ResponseWriter, r *http.Request) {
 		// Computed outside the summary branch: a CronJob that has never run at
 		// all is the clearest missed case there is, and it has no summary.
 		item.Missed = schedule.IsMissed(cj.Schedule, cj.TZ(), cj.Suspended, lastRunForSchedule(item.LastRun), now)
+		if sum := summaries[cj.ID]; sum != nil {
+			v := runcheck.Check(sum.LastRun, sum.Durations, now)
+			item.Stuck, item.StuckReason = v.Stuck, v.Reason
+		}
 		out = append(out, item)
 	}
 

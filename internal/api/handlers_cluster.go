@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kubecron/kubecron/internal/auth"
+	"github.com/kubecron/kubecron/internal/runcheck"
 	"github.com/kubecron/kubecron/internal/schedule"
 	"github.com/kubecron/kubecron/internal/storage"
 )
@@ -455,8 +456,9 @@ func derefStr(s *string) string {
 	return *s
 }
 
-// sparklineRuns is how many recent run durations the row sparkline plots.
-const sparklineRuns = 20
+// sparklineRuns is how many recent run durations the row sparkline plots. The
+// same slice is the stuck-run baseline, hence one constant for both.
+const sparklineRuns = runcheck.HistoryRuns
 
 // buildCronJobRow assembles the display data for one CronJob table row from
 // data already in hand: sum may be nil when the CronJob has never run, and
@@ -485,6 +487,7 @@ func buildCronJobRow(clusterID string, cj storage.CronJob, sum *storage.CronJobS
 	}
 
 	row.IsMissed = schedule.IsMissed(cj.Schedule, tz, cj.Suspended, lastRunForSchedule(row.LastRun), now)
+	row.Stuck = runcheck.Check(row.LastRun, row.Durations, now)
 	return row
 }
 

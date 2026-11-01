@@ -204,4 +204,3 @@ const countdownJS = `<script>
   setInterval(update, 1000);
 })();
 </script>`
-

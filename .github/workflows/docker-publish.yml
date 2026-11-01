@@ -3,7 +3,8 @@ name: Docker Publish
 on:
   push:
     tags:
-      - '*.*.*'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
     branches:
       - main
   workflow_dispatch:
@@ -23,15 +24,20 @@ jobs:
       - name: Resolve version and owner
         id: version
         run: |
+          # Tag vX.Y.Z publishes image X.Y.Z; `latest` moves only on a final
+          # version, never on a pre-release (vX.Y.Z-rc.1).
+          LATEST="false"
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            VERSION="$GITHUB_REF_NAME"
+            VERSION="${GITHUB_REF_NAME#v}"
             IS_RELEASE="true"
+            case "$VERSION" in *-*) ;; *) LATEST="true" ;; esac
           else
             VERSION="main"
             IS_RELEASE="false"
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           echo "is_release=$IS_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
           echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
@@ -65,16 +71,16 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ steps.version.outputs.owner }}/kubecron:latest
             ghcr.io/${{ steps.version.outputs.owner }}/kubecron:${{ steps.version.outputs.value }}
             ghcr.io/${{ steps.version.outputs.owner }}/kubecron:${{ github.sha }}
+            ${{ steps.version.outputs.latest == 'true' && format('ghcr.io/{0}/kubecron:latest', steps.version.outputs.owner) || '' }}
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Generate SBOM
         if: steps.version.outputs.is_release == 'true'
-        uses: anchore/sbom-action@v0.24.0
+        uses: anchore/sbom-action@v0.24.3
         with:
           image: ghcr.io/${{ steps.version.outputs.owner }}/kubecron:${{ github.sha }}
           artifact-name: sbom-kubecron.spdx.json

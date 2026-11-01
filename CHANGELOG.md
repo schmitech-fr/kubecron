@@ -10,6 +10,84 @@ _Nothing yet._
 
 ---
 
+## [0.5.0] - 2026-11-01
+
+First tagged release: `v0.5.0` publishes image `ghcr.io/schmitech-fr/kubecron:0.5.0`.
+Versions below were never tagged.
+
+### Added
+
+- **Alerts with the log attached.** Slack (incoming webhook), Microsoft Teams
+  (Workflows webhook, Adaptive Card), SMTP and a generic JSON webhook, on a
+  **failed** run, a **missed** scheduled run and a **stuck** run. Each message
+  carries the run's last log lines (`ALERT_LOG_LINES`, default 20), how long the
+  CronJob usually takes, and a link to the run (`ALERT_BASE_URL`). Alerts are
+  evaluated from stored state every 30 s and recorded in a new `alerts_sent`
+  table, so each goes out once, across restarts. A missed run alerts once per
+  silence. Runs marked failed by the startup recovery are not reported. Off
+  until a destination is set; chart values under `alerts.*`, destinations in a
+  Secret. New counter `kubecron_alerts_sent_total{kind,notifier,result}`.
+- **Stuck-run detection.** A running run is stuck when its pod has been in
+  CrashLoopBackOff, ImagePullBackOff, ErrImagePull, InvalidImageName,
+  CreateContainer(Config)Error or Unschedulable for 5 minutes, or when it has
+  run longer than `max(p95 × 2, median × 3, 1 min)` of the CronJob's last 20
+  finished runs (at least 5 needed). One rule (`internal/runcheck`) behind a
+  `stuck` badge on the CronJob row, the new gauge `kubecron_run_stuck`, and the
+  stuck alerts. The pod watcher now records the pod's waiting reason
+  (migration 000007).
+- `/api/v1` (additive): CronJobs carry `stuck` and `stuck_reason`, runs carry
+  `pod_waiting_reason` and `pod_waiting_since`, and the discovery document
+  advertises `capabilities.stuck_detection`.
+- **Grafana dashboard** for the `kubecron_*` metrics:
+  `charts/kubecron/dashboards/kubecron.json`, or `grafana.dashboard.enabled=true`
+  to ship it as a ConfigMap labelled for the Grafana sidecar. Fleet tiles
+  (failing, missed, stuck, running, suspended), a "needing attention" table,
+  run outcomes, durations, resource peaks, and KubeCron's own health.
+
+### Changed
+
+- **Default run-history retention is 180 days** (was 90): `RETENTION_DAYS` and
+  the chart's `config.retentionDays`. `LOG_RETENTION_DAYS` stays at 14. An
+  install that sets the value explicitly is unaffected; one relying on the
+  default keeps twice the run metadata.
+- **Release images publish from `vX.Y.Z` tags** (was `X.Y.Z`). The image tag
+  drops the `v`; `latest` moves only on a final version, never on
+  `vX.Y.Z-rc.N`. `main` and `<sha>` images still publish on every push to `main`.
+- Go floor raised to 1.27 (`go.mod`), matching CI and the Dockerfile.
+- Dependencies: `k8s.io/*` 0.37.2, `go-oidc/v3` 3.21.0, `oauth2` 0.37.0,
+  `modernc.org/sqlite` 1.61.1, `prometheus/client_golang` 1.25.0,
+  `golang.org/x/net` 0.62.0, `anchore/sbom-action` 0.24.3.
+- CI runs `govulncheck` on every build (AUDIT SUP-1, partial: no image scan
+  yet) and no longer skips Renovate's pull requests (INFRA-5). Renovate groups
+  `k8s.io/*`, which only build at matching versions.
+
+### Security
+
+- **Open redirect after login.** `/auth/login?redirect=/\evil.com` was accepted
+  as a local path and browsers resolve it as `//evil.com`. Backslashes and
+  control characters are now rejected.
+- `golang.org/x/net` 0.57.0 → 0.62.0 fixes five reachable HTTP/2 advisories
+  (GO-2026-6603, GO-2026-6610 and three others).
+- Live log lines escape carriage returns. A `\r` is an SSE line terminator, so a
+  pod printing `\revent: done\r` could end or forge events in the viewer.
+
+### Fixed
+
+- **Manually triggered Jobs are owned by their CronJob**, as with
+  `kubectl create job --from`. Without the owner reference the Job watcher
+  ignored them, history limits never collected them and deleting the CronJob
+  left them behind.
+- Progress-bar output (`\r`) no longer truncates lines in the live log view.
+- `logs.txt` (`/api/runs/…` and `/api/v1/runs/…`) answers `404` for an unknown
+  run instead of an empty file, and `500` on a store error.
+- After login, a URL with its own query string is restored whole; everything
+  after the first `&` used to be lost.
+- The logged-out page is styled: `/static/` is no longer behind the session guard.
+- README: the Helm install pointed at an OCI chart that is not published; it
+  now installs from a tagged checkout.
+
+---
+
 ## [0.4.1] - 2026-08-21
 
 ### Fixed

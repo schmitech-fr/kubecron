@@ -72,6 +72,22 @@ var (
 		Help: "Whether the CronJob missed its last scheduled run (1) or not (0).",
 	}, []string{"cluster", "namespace", "cronjob"})
 
+	// RunStuck is 1 while the CronJob's latest run is stuck: its pod blocked in
+	// CrashLoopBackOff, ImagePullBackOff, Unschedulable… past a grace period,
+	// or running longer than max(p95 × 2, median × 3) of its own history. The
+	// rule lives in runcheck so the badge, this gauge and the alerts agree.
+	RunStuck = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "kubecron_run_stuck",
+		Help: "Whether the CronJob's latest run is stuck (1) or not (0).",
+	}, []string{"cluster", "namespace", "cronjob"})
+
+	// AlertsSentTotal counts alert deliveries by kind, notifier and result, so
+	// a notifier that has started failing is itself alertable.
+	AlertsSentTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "kubecron_alerts_sent_total",
+		Help: "Alert deliveries, by kind (failed, missed, stuck), notifier and result (ok, error).",
+	}, []string{"kind", "notifier", "result"})
+
 	// LastRunCPUMillicores is the peak CPU seen during the most recent run.
 	LastRunCPUMillicores = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "kubecron_last_run_cpu_millicores",
@@ -145,6 +161,7 @@ func DeleteCronJobSeries(clusterID, namespace, name string) {
 	LastRunDurationSeconds.DeletePartialMatch(labels)
 	RunsActive.DeletePartialMatch(labels)
 	CronJobMissed.DeletePartialMatch(labels)
+	RunStuck.DeletePartialMatch(labels)
 	LastRunCPUMillicores.DeletePartialMatch(labels)
 	LastRunMemoryBytes.DeletePartialMatch(labels)
 }

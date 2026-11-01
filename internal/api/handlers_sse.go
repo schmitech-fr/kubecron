@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/kubecron/kubecron/internal/storage"
@@ -98,8 +100,7 @@ func (h *Handler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	if run.Status != "running" {
 		lines, _ := h.store.GetLogLinesTail(ctx, id, sseLogLimit)
 		for _, l := range lines {
-			esc := html.EscapeString(l.Line)
-			fmt.Fprintf(w, "data: <div class=\"ll\" data-raw=\"%s\">%s</div>\n\n", esc, esc)
+			writeLogLine(w, l.Line)
 		}
 		fmt.Fprintf(w, "event: done\ndata: {}\n\n")
 		flusher.Flush()
@@ -113,8 +114,7 @@ func (h *Handler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	// Replay the most recent lines already persisted to DB.
 	hist, _ := h.store.GetLogLinesTail(ctx, id, sseLogLimit)
 	for _, l := range hist {
-		esc := html.EscapeString(l.Line)
-		fmt.Fprintf(w, "data: <div class=\"ll\" data-raw=\"%s\">%s</div>\n\n", esc, esc)
+		writeLogLine(w, l.Line)
 	}
 	flusher.Flush()
 
@@ -137,8 +137,7 @@ func (h *Handler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 				broadcastDone = true
 				broadcastAt = time.Now()
 			} else {
-				esc := html.EscapeString(line)
-				fmt.Fprintf(w, "data: <div class=\"ll\" data-raw=\"%s\">%s</div>\n\n", esc, esc)
+				writeLogLine(w, line)
 				flusher.Flush()
 			}
 
@@ -160,4 +159,17 @@ func (h *Handler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// writeLogLine sends one log line as an SSE data event.
+//
+// A carriage return is an SSE line terminator, and log output keeps embedded
+// ones (progress bars rewrite a line with "\r"). Left raw, everything after it
+// was parsed as a new SSE field: the visible line was cut short, and a pod
+// printing "\revent: done\r" could end or forge events in the viewer. It is
+// sent as a character reference instead, which decodes back to "\r" in both
+// the text and the data-raw attribute.
+func writeLogLine(w io.Writer, line string) {
+	esc := strings.ReplaceAll(html.EscapeString(line), "\r", "&#13;")
+	fmt.Fprintf(w, "data: <div class=\"ll\" data-raw=\"%s\">%s</div>\n\n", esc, esc)
 }

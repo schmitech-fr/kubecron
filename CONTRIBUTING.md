@@ -82,14 +82,17 @@ k8s/                    # Kubernetes manifests (namespace, RBAC, deployment, PVC
 
 ## Versioning
 
-When bumping a release, update the version constant:
+When bumping a release, update together:
 
 1. `internal/version/version.go` — `Version` constant (displayed in the UI and logs)
+2. `charts/kubecron/Chart.yaml` — `version` and `appVersion`
+3. `CHANGELOG.md` — a dated section for the version
 
-Docker images are published via `docker-publish.yml` when a `*.*.*` git tag is pushed:
+Release images are published by `docker-publish.yml` when a `vX.Y.Z` tag is pushed
+from `main`; the image is tagged `X.Y.Z` (and `latest` for a final version only):
 
 ```bash
-git tag 0.2.0 && git push origin 0.2.0
+git tag v0.5.0 && git push origin v0.5.0
 ```
 
 ## Pull request checklist
@@ -97,10 +100,9 @@ git tag 0.2.0 && git push origin 0.2.0
 - [ ] `go build ./...` passes
 - [ ] `go vet ./...` passes
 - [ ] `go test ./...` passes
-- [ ] `templ generate` was run and generated files are committed
 - [ ] New env vars are documented in `README.md`, `.env.example`, and `CLAUDE.md`
 - [ ] `CHANGELOG.md` updated (if releasing)
-- [ ] `k8s/clusterrole.yaml` updated if new K8s API access is required
+- [ ] `charts/kubecron/templates/clusterrole.yaml` updated if new K8s API access is required
 
 ## Code of Conduct
 

@@ -14,7 +14,7 @@ for engineering findings behind the AUDIT ids, see [`docs/AUDIT.md`](docs/AUDIT.
 - [ ] **Publish Helm chart to OCI / Artifact Hub** — push `charts/kubecron` to GHCR OCI registry and submit to Artifact Hub
 - [ ] **GitHub Container Registry visibility** — ensure GHCR images are public once the repo is public
 - [ ] **Automated GitHub Releases** — workflow that creates a GitHub Release from CHANGELOG entries on tag push
-- [ ] **CVE gate in CI** — `govulncheck ./...` on every build plus an image scan on publish. **Must land before digest pinning** (AUDIT SUP-1)
+- [ ] **CVE gate in CI** — `govulncheck ./...` on every build _(done v0.5.0)_; image scan on publish still to do. **Must land before digest pinning** (AUDIT SUP-1)
 - [ ] **Pin base image digests** — `golang:1.26@sha256:...` and `gcr.io/distroless/static:nonroot@sha256:...` in Dockerfile. Do this *after* the CVE gate: today the floating tag is what keeps the shipped stdlib patched, so pinning first would freeze a vulnerable one in (AUDIT INFRA-1 × SUP-1)
 
 ## Features
@@ -36,13 +36,13 @@ for engineering findings behind the AUDIT ids, see [`docs/AUDIT.md`](docs/AUDIT.
 - [ ] **S3 log storage** — store log lines in S3/object storage instead of SQLite for unlimited retention
 - [x] **Global "what is wrong" page** — status-first summary on both the fleet overview and the cluster view: success rate, failures (and how many CronJobs they came from), in-flight and suspended counts, plus rankings by failures / mean duration / peak CPU / peak memory over 24 h, 7 d or 30 d _(v0.3.0, PRODUCT §3.1)_. Overrunning-run detection is still open — see "Stuck / runaway run detection" below
 - [ ] **Collector: per-cluster NetworkPolicy in the chart** — a collector should only be reachable from the namespaces that read it; today `mode: server` relies on ClusterIP plus the bearer token (AUDIT SEC-30)
-- [ ] **Alerting with log context** — webhook/Slack/Teams/SMTP on failure, missed run and runaway duration, with the failing pod's last log lines attached — the part Alertmanager cannot do _(PRODUCT §3.2)_
-- [ ] **Stuck / runaway run detection** — flag a run exceeding `max(p95 × 2, median × 3)` of its own history _(PRODUCT §3.3)_
+- [x] **Alerting with log context** — webhook/Slack/Teams/SMTP on failure, missed run and runaway duration, with the failing pod's last log lines attached — the part Alertmanager cannot do _(v0.5.0, PRODUCT §3.2)_
+- [x] **Stuck / runaway run detection** — flag a run exceeding `max(p95 × 2, median × 3)` of its own history, or a pod blocked in CrashLoopBackOff/ImagePullBackOff/Unschedulable _(v0.5.0, PRODUCT §3.3)_
 - [ ] **Daily digest** — one scheduled summary per team: what failed, what slowed down, what stopped running _(PRODUCT §3.4)_
 - [ ] **Cross-run log search** — SQLite FTS5 over `log_lines`, searchable across runs and clusters, over logs of pods that no longer exist _(PRODUCT §4.1)_
 - [ ] **Failure fingerprinting** — normalise and group error signatures to show recurrence across clusters _(PRODUCT §4.2)_
 - [ ] **Right-sizing + cost** — join stored requests/limits against observed peaks; cost per run from `resource_samples` _(PRODUCT §5.1–5.2)_
-- [ ] **Grafana dashboard** — pre-built dashboard JSON for `kubecron_*` metrics (16 families as of v0.3.0, incl. `kubecron_cronjob_missed` and `kubecron_runs_active`)
+- [x] **Grafana dashboard** — pre-built dashboard JSON for `kubecron_*` metrics, shipped in the chart _(v0.5.0)_
 - [x] **Collector mode** — `KUBECRON_MODE=server` runs the same binary headless: read-only versioned `/api/v1`, no HTML, no mutating route, no mutating RBAC. One per cluster on its own ServiceAccount, discovered by Service label and read on demand by a console (KubeDeck) that was not running when a run happened. Contract in `docs/COLLECTOR-API.md` _(v0.4.0)_
 - [x] **Pagination** — cursor-based "Load more" for run history; heatmap click-to-filter by day; blue "running" tile indicator _(v0.2.0; the cursor query itself was fixed in v0.4.0 — AUDIT BUG-21)_
 - [ ] **CronJob annotations** — display description, owner, runbook link from K8s annotations
@@ -61,7 +61,7 @@ for engineering findings behind the AUDIT ids, see [`docs/AUDIT.md`](docs/AUDIT.
 - [x] **helm lint in CI** _(v0.0.1)_
 - [x] **Unit tests (partial)** — schedule (incl. timezone/DST), auth HMAC, storage (incl. migration upgrade path), broadcaster, watcher (Job + CronJob handlers), HTTP handlers (`internal/api`) covered _(v0.2.0)_
 - [ ] **Integration tests** — Pod informer event handling with `k8s.io/client-go/kubernetes/fake` (Job and CronJob handlers already covered)
-- [ ] **Renovate** — automated dependency updates for Go modules and GitHub Actions; also remove the `renovate[bot]` CI skip so its PRs are tested _(AUDIT INFRA-5)_
+- [x] **Renovate** — automated dependency updates for Go modules and GitHub Actions, `k8s.io/*` grouped, CI no longer skipped for its PRs _(v0.5.0, AUDIT INFRA-5)_
 - [x] **seccompProfile: RuntimeDefault** — added to pod security context in `values.yaml` _(v0.2.0, AUDIT INFRA-2)_
 - [x] **Security hardening batch** — HTTP server timeouts, generic errors on suspend/resume, nosniff/XFO/Referrer-Policy headers, CSRF `Secure` flag + POST logout, split ClusterRole verbs _(v0.2.0, AUDIT SEC-20/21/23-partial/25/26)_
 - [ ] **CSP + HSTS** — remaining SEC-23 headers; CSP requires moving inline scripts to nonce'd blocks
