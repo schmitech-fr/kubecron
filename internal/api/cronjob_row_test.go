@@ -158,3 +158,28 @@ func TestBuildCronJobRow_ConcurrentAndSummary(t *testing.T) {
 		t.Error("expected IsConcurrent=false with no running runs")
 	}
 }
+
+// A run past its CronJob's runaway threshold shows a stuck badge carrying the
+// reason; the same run within it shows none.
+func TestBuildCronJobRow_StuckBadge(t *testing.T) {
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	cj := storage.CronJob{ID: "c1/ns/job", ClusterID: "c1", Namespace: "ns", Name: "job", Schedule: "0 0 1 1 *"}
+	history := []int64{240_000, 240_000, 240_000, 240_000, 240_000} // 4 min each → threshold 12 min
+
+	for _, tc := range []struct {
+		elapsed time.Duration
+		badge   bool
+	}{{11 * time.Minute, false}, {13 * time.Minute, true}} {
+		sum := &storage.CronJobSummary{
+			LastRun:   &storage.JobRun{ID: "r", Status: "running", StartedAt: now.Add(-tc.elapsed)},
+			Durations: history,
+		}
+		html := renderCronJobRow(buildCronJobRow("c1", cj, sum, nil, now))
+		if got := strings.Contains(html, ">stuck</span>"); got != tc.badge {
+			t.Errorf("elapsed %v: stuck badge = %v, want %v", tc.elapsed, got, tc.badge)
+		}
+		if tc.badge && !strings.Contains(html, `title="running for 13m00s, usually 4m00s"`) {
+			t.Errorf("badge carries no reason: %s", html)
+		}
+	}
+}

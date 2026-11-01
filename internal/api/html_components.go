@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/kubecron/kubecron/internal/runcheck"
 	"github.com/kubecron/kubecron/internal/storage"
 )
 
@@ -19,6 +20,8 @@ type cronJobRowData struct {
 	Stats7d   *storage.RunStats
 	Durations []int64
 	IsMissed  bool
+	// Stuck is the latest run's runcheck verdict.
+	Stuck runcheck.Verdict
 	// ScheduleError is set when the cron expression or its time zone could not
 	// be resolved, so the row shows no countdown instead of a wrong one.
 	ScheduleError bool
@@ -68,6 +71,9 @@ func renderCronJobRow(d cronJobRowData) string {
 	}
 	if d.IsMissed {
 		suspendedTag += ` <span class="badge" style="border-color:rgba(252,129,129,0.4);color:var(--red);">missed</span>`
+	}
+	if d.Stuck.Stuck {
+		suspendedTag += fmt.Sprintf(` <span class="badge" style="border-color:rgba(252,129,129,0.4);color:var(--red);" title="%s">stuck</span>`, esc(d.Stuck.Reason))
 	}
 
 	// The zone the schedule is evaluated in is part of what the schedule means,

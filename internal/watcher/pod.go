@@ -112,6 +112,14 @@ func (h *PodHandler) OnUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
+	// Record why the pod is blocked, on change only: pods are updated far more
+	// often than their waiting reason changes.
+	if reason := waitingReason(pod); oldObj == nil || reason != waitingReason(asPod(oldObj)) {
+		if err := h.store.UpdateJobRunWaiting(ctx, runID, reason, time.Now()); err != nil {
+			slog.Warn("failed to update pod waiting reason", "runID", runID, "err", err)
+		}
+	}
+
 	phase := pod.Status.Phase
 
 	switch phase {
@@ -208,6 +216,34 @@ func (h *PodHandler) findRunID(ctx context.Context, jobName string) string {
 
 // OnDelete is a no-op.
 func (h *PodHandler) OnDelete(obj interface{}) {}
+
+// waitingReason returns why pod is blocked: the waiting reason of its first
+// waiting container (init containers first, since they run first), or
+// "Unschedulable" when the scheduler cannot place it. "" when nothing waits,
+// including once the pod has finished.
+func waitingReason(pod *corev1.Pod) string {
+	if pod == nil || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+		return ""
+	}
+	for _, statuses := range [][]corev1.ContainerStatus{pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses} {
+		for _, cs := range statuses {
+			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
+				return cs.State.Waiting.Reason
+			}
+		}
+	}
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse && c.Reason == corev1.PodReasonUnschedulable {
+			return corev1.PodReasonUnschedulable
+		}
+	}
+	return ""
+}
+
+func asPod(obj interface{}) *corev1.Pod {
+	pod, _ := obj.(*corev1.Pod)
+	return pod
+}
 
 // jobOwner returns the name of the Job that owns the given pod, if any.
 func jobOwner(pod *corev1.Pod) (string, bool) {

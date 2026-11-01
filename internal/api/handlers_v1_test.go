@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -531,5 +533,47 @@ func TestListRunsV1TolerantOfUnescapedCursor(t *testing.T) {
 	}
 	if second.Runs[0].ID == first.Runs[0].ID {
 		t.Error("unescaped cursor silently reset to page one")
+	}
+}
+
+// A run far past its CronJob's usual duration is reported stuck, with the
+// reason, and the discovery document says the field is meaningful.
+func TestListCronJobsV1ReportsStuck(t *testing.T) {
+	h, store := newV1Handler(t)
+	seedCluster(t, store)
+	cjID := seedCronJob(t, store)
+	ctx := context.Background()
+	now := time.Now()
+	for i := range 5 {
+		start := now.Add(-time.Duration(10-i) * time.Hour)
+		end := start.Add(4 * time.Minute)
+		id := fmt.Sprintf("ok-%d", i)
+		if err := store.UpsertJobRun(ctx, storage.JobRun{ID: id, CronJobID: cjID, PodName: id, Trigger: "scheduled", Status: "running", StartedAt: start}); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.UpdateJobRunStatus(ctx, id, "succeeded", &end, 0, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.UpsertJobRun(ctx, storage.JobRun{ID: "slow", CronJobID: cjID, PodName: "slow", Trigger: "scheduled", Status: "running", StartedAt: now.Add(-2 * time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/clusters/"+testClusterID+"/cronjobs", nil)
+	r.SetPathValue("clusterID", testClusterID)
+	w := httptest.NewRecorder()
+	h.ListCronJobsV1(w, r)
+	var body struct {
+		CronJobs []cronJobV1 `json:"cronjobs"`
+	}
+	decodeJSON(t, w, &body)
+	if len(body.CronJobs) != 1 || !body.CronJobs[0].Stuck || !strings.Contains(body.CronJobs[0].StuckReason, "usually 4m00s") {
+		t.Fatalf("cronjobs = %+v, want one stuck with its reason", body.CronJobs)
+	}
+
+	w = httptest.NewRecorder()
+	h.Collector(w, httptest.NewRequest(http.MethodGet, "/api/v1/collector", nil))
+	if !strings.Contains(w.Body.String(), `"stuck_detection":true`) {
+		t.Errorf("collector document does not advertise stuck_detection: %s", w.Body.String())
 	}
 }
