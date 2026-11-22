@@ -10,6 +10,23 @@ _Nothing yet._
 
 ---
 
+## [0.5.1] - 2026-11-22
+
+Dependency updates only (PR #54); no behaviour change.
+
+### Changed
+
+- `github.com/caarlos0/env/v11` v11.4.1 → v11.4.2 (fixes infinite recursion of
+  `expand` on a cyclic reference).
+- `golang.org/x/oauth2` v0.37.0 → v0.38.0 (optional OIDC login).
+- `modernc.org/sqlite` v1.61.1 → v1.62.0 (`modernc.org/libc` v1.80.1); SQLite
+  3.54.1 unchanged.
+- `k8s.io/utils` pseudo-version bump.
+- CI: `sigstore/cosign-installer` v4.1.2 → v4.1.3 (cosign 3.1.4), first used by
+  this tag's image signing.
+
+---
+
 ## [0.5.0] - 2026-11-01
 
 First tagged release: `v0.5.0` publishes image `ghcr.io/schmitech-fr/kubecron:0.5.0`.

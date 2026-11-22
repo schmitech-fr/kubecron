@@ -95,7 +95,7 @@ The chart is not published to a registry yet; install it from a tagged checkout
 (the chart's `appVersion` selects the matching image):
 
 ```bash
-git clone --branch v0.5.0 https://github.com/schmitech-fr/kubecron.git
+git clone --branch v0.5.1 https://github.com/schmitech-fr/kubecron.git
 cd kubecron
 
 # Encode your kubeconfig(s) in base64 — one per cluster
