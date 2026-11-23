@@ -13,7 +13,7 @@ require (
 	k8s.io/client-go v0.37.2
 	k8s.io/metrics v0.37.2
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
-	modernc.org/sqlite v1.62.0
+	modernc.org/sqlite v1.63.0
 )
 
 require (
