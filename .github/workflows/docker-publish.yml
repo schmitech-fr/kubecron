@@ -80,7 +80,7 @@ jobs:
 
       - name: Generate SBOM
         if: steps.version.outputs.is_release == 'true'
-        uses: anchore/sbom-action@v0.24.3
+        uses: anchore/sbom-action@v0.24.4
         with:
           image: ghcr.io/${{ steps.version.outputs.owner }}/kubecron:${{ github.sha }}
           artifact-name: sbom-kubecron.spdx.json
