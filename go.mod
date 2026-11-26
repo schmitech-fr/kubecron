@@ -8,10 +8,10 @@ require (
 	github.com/prometheus/client_golang v1.25.0
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/oauth2 v0.38.0
-	k8s.io/api v0.37.2
-	k8s.io/apimachinery v0.37.2
-	k8s.io/client-go v0.37.2
-	k8s.io/metrics v0.37.2
+	k8s.io/api v0.37.3
+	k8s.io/apimachinery v0.37.3
+	k8s.io/client-go v0.37.3
+	k8s.io/metrics v0.37.3
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	modernc.org/sqlite v1.62.0
 )
